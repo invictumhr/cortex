@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(composer create-project *)",
+      "PowerShell(Get-ChildItem -Force | Format-Table Mode,Length,Name -AutoSize | Out-String; \"--- count ---\"; \\(Get-ChildItem -Force | Measure-Object\\).Count)",
+      "PowerShell(php artisan tinker --execute=\"Cache::put\\('cortex_ping','pong',5\\); echo 'CACHE_GET=' . Cache::get\\('cortex_ping'\\);\")",
+      "Bash(php _envtest.php)",
+      "Bash(php _apitest.php)",
+      "Bash(composer require *)",
+      "Bash(php artisan *)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(php _modeltest.php)",
+      "Bash(php _grktest.php)",
+      "Bash(php _gtest.php)",
+      "Bash(php _dstest.php)"
+    ]
+  }
+}
