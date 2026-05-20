@@ -9,6 +9,7 @@ use App\Events\TurnCompleted;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Persona;
+use App\Services\Chat\ChairService;
 use App\Services\Chat\ChatOrchestrator;
 use App\Services\Chat\PersonaResponder;
 use App\Services\Chat\ScribeService;
@@ -36,7 +37,7 @@ class GeneratePersonaResponse implements ShouldQueue
         public int $position,
     ) {}
 
-    public function handle(ChatOrchestrator $orchestrator, PersonaResponder $responder, ScribeService $scribe): void
+    public function handle(ChatOrchestrator $orchestrator, PersonaResponder $responder, ScribeService $scribe, ChairService $chair): void
     {
         $chat = Chat::find($this->chatId);
 
@@ -52,6 +53,15 @@ class GeneratePersonaResponse implements ShouldQueue
         }
 
         if ($chat->status !== Chat::STATUS_ACTIVE) {
+            return;
+        }
+
+        // A continuous discussion runs only while the user's chat page is
+        // open — once the heartbeat lapses, the loop stops itself.
+        if ($chat->continuous && ! Cache::has('cortex:heartbeat:'.$chat->id)) {
+            $chat->update(['status' => Chat::STATUS_PAUSED]);
+            broadcast(new TurnCompleted($chat->refresh(), 'left'));
+
             return;
         }
 
@@ -105,14 +115,26 @@ class GeneratePersonaResponse implements ShouldQueue
 
         // Round finished.
         broadcast(new RoundCompleted($chat, $this->round));
-        $scribe->maybeSummarize($chat);
+
+        // A continuous chat has no final round — it loops until paused.
+        $isFinalRound = ! $chat->continuous && $this->round >= (int) $chat->rounds_per_turn;
+
+        // `--fast` disables the scribe by setting an astronomically high interval.
+        if ((int) $chat->scribe_interval < 1000000) {
+            if ($isFinalRound) {
+                $scribe->summarize($chat, true);
+                $chair->decide($chat);
+            } else {
+                $scribe->maybeSummarize($chat, $this->round);
+            }
+        }
 
         $chat->refresh();
 
-        if ($this->round < (int) $chat->rounds_per_turn && $chat->status === Chat::STATUS_ACTIVE) {
+        if (! $isFinalRound && $chat->status === Chat::STATUS_ACTIVE) {
             $orchestrator->startRound($chat, $this->turn, $this->round + 1);
         } else {
-            broadcast(new TurnCompleted($chat, 'completed'));
+            broadcast(new TurnCompleted($chat, $isFinalRound ? 'completed' : 'paused'));
         }
     }
 

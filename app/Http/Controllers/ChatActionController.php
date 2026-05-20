@@ -5,17 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\Chat;
 use App\Services\Chat\ChatOrchestrator;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 
 class ChatActionController extends Controller
 {
+    /** Seconds a heartbeat keeps a continuous discussion alive. */
+    private const HEARTBEAT_TTL = 50;
+
     public function __construct(private ChatOrchestrator $orchestrator) {}
 
     public function pause(Chat $chat): JsonResponse
     {
         Gate::authorize('update', $chat);
-        $this->orchestrator->pause($chat);
+        $this->orchestrator->pause($chat, conclude: true);
 
         return response()->json(['ok' => true, 'status' => $chat->fresh()->status]);
     }
@@ -23,34 +26,39 @@ class ChatActionController extends Controller
     public function resume(Chat $chat): JsonResponse
     {
         Gate::authorize('update', $chat);
+        $this->touchHeartbeat($chat);
         $this->orchestrator->resume($chat);
 
         return response()->json(['ok' => true, 'status' => $chat->fresh()->status]);
     }
 
-    public function setRounds(Request $request, Chat $chat): JsonResponse
+    /**
+     * The open chat page pings this; the discussion loop stops itself once
+     * the heartbeat lapses (page closed or navigated away).
+     */
+    public function heartbeat(Chat $chat): JsonResponse
     {
-        Gate::authorize('update', $chat);
+        Gate::authorize('view', $chat);
+        $this->touchHeartbeat($chat);
 
-        $validated = $request->validate([
-            'rounds_per_turn' => ['required', 'integer', 'min:1', 'max:200'],
-        ]);
-
-        $chat->update(['rounds_per_turn' => $validated['rounds_per_turn']]);
-
-        return response()->json(['ok' => true, 'rounds_per_turn' => $chat->rounds_per_turn]);
+        return response()->json(['ok' => true]);
     }
 
-    public function addRounds(Request $request, Chat $chat): JsonResponse
+    /**
+     * Fired via sendBeacon when the user leaves the page — stop the
+     * discussion silently, with no Chair verdict.
+     */
+    public function leave(Chat $chat): JsonResponse
     {
         Gate::authorize('update', $chat);
+        Cache::forget('cortex:heartbeat:'.$chat->id);
+        $this->orchestrator->pause($chat);
 
-        $validated = $request->validate([
-            'rounds' => ['required', 'integer', 'min:1', 'max:200'],
-        ]);
+        return response()->json(['ok' => true]);
+    }
 
-        $this->orchestrator->addRounds($chat, $validated['rounds']);
-
-        return response()->json(['ok' => true, 'rounds_per_turn' => $chat->fresh()->rounds_per_turn]);
+    private function touchHeartbeat(Chat $chat): void
+    {
+        Cache::put('cortex:heartbeat:'.$chat->id, true, self::HEARTBEAT_TTL);
     }
 }

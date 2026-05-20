@@ -12,6 +12,11 @@ param(
     [int]$Scribe = 0,
     [int]$Chat = 0,
     [string]$Title,
+    [string]$Context,
+    [string]$Constraints,
+    [string]$Language = '',
+    [switch]$Architect,
+    [switch]$Strong,
     [switch]$Fast,
     [switch]$Memory,
     [switch]$Json,
@@ -30,7 +35,7 @@ if ($Help -or -not $Topic) {
         $schema = [ordered]@{
             tool          = 'cortex'
             description   = 'Vijece AI strucnjaka: pokrece raspravu vise AI persona (svaka na svom modelu) o zadanoj temi i vraca strukturiranu sintezu.'
-            usage         = 'cortex "<tema>" [-Personas a,b,c] [-Rounds N] [-Scribe N] [-Fast] [-Memory] [-Title "..."] [-Chat ID] [-Json]'
+            usage         = 'cortex "<tema>" [-Personas a,b,c] [-Rounds N] [-Context file] [-Constraints "..."] [-Fast] [-Memory] [-Title "..."] [-Chat ID] [-Json]'
             parameters    = [ordered]@{
                 Topic    = 'Tema/pitanje boardroomu (prvi pozicijski argument). Obavezno za pokretanje.'
                 Personas = 'Slugovi persona (zarezom ili razmakom). Izostavljeno => bira 5 automatski.'
@@ -38,6 +43,10 @@ if ($Help -or -not $Topic) {
                 Scribe   = 'Prag poruka za scribe sazetak (default 50).'
                 Fast     = 'Brzi nacin: 1 krug, bez scribe sazetka.'
                 Memory   = 'Ubaci akumulirano globalno znanje u kontekst rasprave.'
+                Context  = 'Putanja do datoteke s kontekstom (data model, postojece stanje).'
+                Constraints = 'Tvrda ogranicenja koja sve persone moraju postovati.'
+                Architect = 'Model dizajnira panel uloga skrojen za pitanje umjesto fiksnih persona.'
+                Strong   = 'Panel trci na flagship modelima svakog providera (skuplje, jace).'
                 Title    = 'Naslov rasprave.'
                 Chat     = 'ID postojece rasprave za nastavak (produbljivanje).'
                 Json     = 'Strojno-citljiv JSON izlaz.'
@@ -65,6 +74,11 @@ if ($Help -or -not $Topic) {
     -Scribe N         Prag za scribe sazetak (default 50; stavi 8 za kratke)
     -Fast             Brzi nacin: 1 krug, bez scribe sazetka
     -Memory           Ubaci akumulirano znanje u kontekst rasprave
+    -Context <file>   Prilozi kontekst personama (data model, postojece stanje)
+    -Constraints "."  Tvrda ogranicenja koja nijedan prijedlog ne smije krsiti
+    -Architect        Model dizajnira panel uloga skrojen za pitanje
+    -Strong           Panel na flagship modelima svakog providera (skuplje, jace)
+    -Language <iso>   Jezik rasprave (ISO 639-1, default en; en hr sr bs sl sk cs pl bg ru uk de fr it es pt nl ro hu sv el da fi)
     -Title "..."      Naslov rasprave
     -Chat ID          Nastavi postojecu raspravu (produbljivanje)
     -Json             Strojno-citljiv JSON izlaz (za druge agente)
@@ -76,6 +90,7 @@ if ($Help -or -not $Topic) {
 
   SRODNE NAREDBE
     cortex-feedback <chat> <1-5>   Ocijeni korisnost rasprave
+    cortex-benchmark "<tema>"      Usporedi boardroom protiv jednog jakog modela
     cortex-knowledge [--rebuild]   Globalna memorija (akumulirano znanje)
 '@
         & php $artisan cortex:personas
@@ -93,6 +108,11 @@ if ($Rounds -gt 0) { $cliArgs += "--rounds=$Rounds" }
 if ($Scribe -gt 0) { $cliArgs += "--scribe=$Scribe" }
 if ($Chat -gt 0)   { $cliArgs += "--chat=$Chat" }
 if ($Title)        { $cliArgs += "--title=$Title" }
+if ($Context)      { $cliArgs += "--context=$Context" }
+if ($Constraints)  { $cliArgs += "--constraints=$Constraints" }
+if ($Language)     { $cliArgs += "--language=$Language" }
+if ($Architect)    { $cliArgs += '--architect' }
+if ($Strong)       { $cliArgs += '--strong' }
 if ($Fast)         { $cliArgs += '--fast' }
 if ($Memory)       { $cliArgs += '--memory' }
 if ($Json)         { $cliArgs += '--json' }

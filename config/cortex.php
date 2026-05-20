@@ -3,7 +3,9 @@
 return [
 
     // JSON output contract version exposed to external agents.
-    'api_version' => '1.1',
+    // 1.2 — scribe key_ideas carry contributing_personas; cortex:discuss --json
+    // adds a cost_estimate block.
+    'api_version' => '1.2',
 
     /*
     |--------------------------------------------------------------------------
@@ -23,15 +25,47 @@ return [
     // Token budgets for a single generation.
     'persona_max_tokens' => (int) env('CORTEX_PERSONA_MAX_TOKENS', 1200),
     'persona_temperature' => (float) env('CORTEX_PERSONA_TEMPERATURE', 0.8),
-    'scribe_max_tokens' => (int) env('CORTEX_SCRIBE_MAX_TOKENS', 2200),
+    'scribe_max_tokens' => (int) env('CORTEX_SCRIBE_MAX_TOKENS', 6000),
+
+    // When a persona's own model fails or returns nothing, retry once on this
+    // model so the boardroom keeps the voice instead of dropping it.
+    'fallback_model' => env('CORTEX_FALLBACK_MODEL', 'gpt-4o-mini'),
+
+    // Cheap model that classifies a topic and auto-picks the best-fit panel.
+    'router_model' => env('CORTEX_ROUTER_MODEL', 'gpt-4o-mini'),
+
+    // `--strong` runs each panel persona on its provider's flagship model.
+    'flagship_models' => [
+        'anthropic' => 'claude-opus-4-7',
+        'openai' => 'o3',
+        'xai' => 'grok-3',
+        'google' => 'gemini-2.5-pro',
+        'mistral' => 'mistral-large-latest',
+        'deepseek' => 'deepseek-chat',
+    ],
+
+    // `--architect`: a model designs a question-specific panel of roles, and
+    // those generated roles run (round-robin) on this spread of models.
+    'architect_model' => env('CORTEX_ARCHITECT_MODEL', 'claude-sonnet-4-6'),
+    'architect_panel_models' => [
+        'claude-sonnet-4-6', 'gpt-4.1', 'grok-3', 'gemini-2.5-flash', 'mistral-large-latest', 'deepseek-chat',
+    ],
+
+    // `cortex:benchmark` — the single-model control and the neutral evaluator.
+    'benchmark_control_model' => env('CORTEX_BENCHMARK_CONTROL_MODEL', 'claude-opus-4-7'),
+    'benchmark_evaluator_model' => env('CORTEX_BENCHMARK_EVALUATOR_MODEL', 'claude-sonnet-4-6'),
 
     // Default number of messages between scribe summaries.
     'default_scribe_interval' => (int) env('CORTEX_DEFAULT_SCRIBE_INTERVAL', 50),
 
+    // The scribe also produces an interim summary every N rounds; a guaranteed
+    // cumulative final summary always runs when a discussion ends.
+    'scribe_round_interval' => (int) env('CORTEX_SCRIBE_ROUND_INTERVAL', 2),
+
     // Personas deliberate in this language (token-efficient); the scribe
     // summarises into the user-facing output language.
     'deliberation_language' => env('CORTEX_DELIBERATION_LANGUAGE', 'English'),
-    'output_language' => env('CORTEX_OUTPUT_LANGUAGE', 'Croatian'),
+    'output_language' => env('CORTEX_OUTPUT_LANGUAGE', 'English'),
 
     /*
     |--------------------------------------------------------------------------

@@ -69,6 +69,17 @@ class ContextBuilder
         $images = $supportsVision ? $this->collectImages($recent) : [];
 
         $context = '';
+
+        if (filled($chat->context)) {
+            $context .= "=== POZNATI KONTEKST (činjenice o korisnikovom sustavu — uzmi zdravo za gotovo) ===\n"
+                .mb_substr(trim((string) $chat->context), 0, 12000)."\n\n";
+        }
+
+        if (filled($chat->constraints)) {
+            $context .= "=== TVRDA OGRANIČENJA (OBAVEZNO poštuj — prijedlog koji ih krši je bezvrijedan) ===\n"
+                .trim((string) $chat->constraints)."\n\n";
+        }
+
         if ($summary) {
             $context .= "SAŽETAK DOSADAŠNJE RASPRAVE (zapisničar Scribe):\n".trim((string) $summary->summary)."\n\n";
         }
@@ -101,19 +112,45 @@ class ContextBuilder
 
         $roster = $others === [] ? 'trenutno nema drugih sudionika' : implode(', ', $others);
 
-        return trim((string) $persona->system_prompt)
+        $prompt = trim((string) $persona->system_prompt)
             ."\n\n--- CORTEX BOARDROOM ---\n"
             ."Sudjeluješ u Cortex boardroomu — strukturiranoj raspravi više AI persona o temi koju zadaje korisnik. "
             ."Ostali sudionici: {$roster}.\n"
-            ."Pravila ponašanja: doprinesi KRATKO (2-6 rečenica, osim ako tema doista zahtijeva više), ostani strogo u svom "
-            ."karakteru i struci, referiraj se na druge persone po imenu kada se slažeš ili osporavaš njihove ideje, gradi na "
+            ."Pravila ponašanja: doprinesi KRATKO (2-6 rečenica, osim ako tema doista zahtijeva više), ostani u svojoj struci "
+            ."i kutu gledanja, referiraj se na druge persone po imenu kada se slažeš ili osporavaš njihove ideje, gradi na "
             ."rečenome umjesto ponavljanja. Govori isključivo u svoje ime — nikada ne piši odgovore drugih persona.\n"
+            ."Doprinosi SUPSTANCOM — tvoj karakter je kut gledanja i ekspertiza, ne kostim: preskoči teatralne geste, "
+            ."uvodne fraze i performans osobnosti, idi ravno na sadržaj.\n";
+
+        // Round 2+ is a debate, not parallel monologue: force each persona to
+        // either reject a specific prior claim or add a genuinely new angle.
+        $round = (int) $chat->current_round;
+        $totalRounds = (int) $chat->rounds_per_turn;
+
+        if ($round >= 2 && $round >= $totalRounds && $totalRounds >= 3) {
+            $prompt .= "Ovo je ZAVRŠNI krug rasprave — vrijeme je za KONVERGENCIJU, ne za nove napade. Reci što panel "
+                ."stvarno može prihvatiti kao zajednički stav, koja je najjača preporuka, i izrijekom označi što ostaje "
+                ."neriješeno. Ne otvaraj nove teme.\n";
+        } elseif ($round >= 2) {
+            $prompt .= "Ovo NIJE prvi krug — pred sobom su doprinosi drugih persona. Tvoja poruka mora pomaknuti raspravu: "
+                ."ili (a) imenuj konkretnu tvrdnju ili pretpostavku određene persone koju odbacuješ i obrazloži zašto je pogrešna "
+                ."ili rizična, ili (b) uvedi novo ograničenje, rizik ili kut koji nitko još nije spomenuo. "
+                ."Puko slaganje, sažimanje ili pristojno neslaganje bez konkretne mete ne računa se kao doprinos.\n";
+        }
+
+        if (filled($chat->constraints)) {
+            $prompt .= 'Korisnik je zadao TVRDA OGRANIČENJA (navedena u kontekstu poruke). Nijedan tvoj prijedlog ih ne smije '
+                ."kršiti — ako bi ideja prekršila ograničenje, ne iznosi je, nego predloži rješenje unutar granica.\n";
+        }
+
+        return $prompt
             ."Intelektualno poštenje (OBAVEZNO): NE izmišljaj konkretne brojke, statistike, postotke, benchmarke ni rezultate. "
             ."Ne tvrdi da si proveo analizu, istrenirao model, pokrenuo upit ili nešto izmjerio — nemaš pristup stvarnim podacima. "
             ."Prijedloge iznosi kao hipoteze i obrazloženo razmišljanje; ono što tek treba izmjeriti izrijekom označi kao 'za provjeru'. "
             ."Ne pretpostavljaj činjenice o korisnikovoj situaciji koje nisu navedene (veličina tima, postojeći sustavi, budžet, "
             ."promet) — ako ti podatak nedostaje, reci to ili postavi pitanje umjesto da ga izmisliš.\n"
-            .'Svoj doprinos napiši isključivo na jeziku: '.config('cortex.deliberation_language', 'English').'.';
+            .'JEZIK ODGOVORA (OBAVEZNO, nadjačava sve jezične upute iz tvog karaktera): pišeš ISKLJUČIVO na jeziku: '
+            .($chat->language ?: config('cortex.deliberation_language', 'English')).'.';
     }
 
     private function speakerName(ChatMessage $message): string

@@ -1,0 +1,20 @@
+[
+    {
+        "id": 2,
+        "category": "tech_strategy",
+        "judge": "gemini-2.5-pro",
+        "winner": "boardroom",
+        "score_boardroom": 10,
+        "score_single": 7,
+        "reason": "Answer 1 provides a very competent and standard technical comparison. However, Answer 2 is exceptional because it frames the problem as a realistic team debate, using personas to surface genuine tensions between competing priorities like operational safety versus future migration costs. It introduces critical, non-obvious angles that Answer 1 misses, such as the impact of undefined read patterns, compliance requirements as a potential blocker, and the subtle complexities of deduplication on each platform. By refusing to give a simple answer without more information, Answer 2 provides a far more nuanced and valuable analysis of the real-world trade-offs involved."
+    },
+    {
+        "id": 6,
+        "category": "tech_strategy",
+        "judge": "gemini-2.5-pro",
+        "winner": "single model",
+        "score_boardroom": 1,
+        "score_single": 10,
+        "reason": "Answer 1 is a non-answer. Answer 2 provides an exceptional breakdown that goes beyond surface-level comparisons to address the real-world factors that drive this decision. It masterfully surfaces the core tensions, such as tRPC's developer experience vs. its hard lock-in, or GraphQL's client flexibility vs. its operational complexity. The analysis of risks based on team size, client topology, and long-term stability is particularly insightful and non-obvious."
+    }
+]

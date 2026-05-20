@@ -14,6 +14,7 @@ class ChatFeedback extends Model
         'rating',
         'comment',
         'helpful_ideas',
+        'used_ideas',
         'source',
     ];
 
@@ -22,6 +23,7 @@ class ChatFeedback extends Model
         return [
             'rating' => 'integer',
             'helpful_ideas' => 'array',
+            'used_ideas' => 'array',
         ];
     }
 

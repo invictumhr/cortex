@@ -17,7 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
 
-        //
+        // The leave endpoint is hit via navigator.sendBeacon, which cannot
+        // attach a CSRF token. It only pauses the caller's own chat.
+        $middleware->validateCsrfTokens(except: [
+            'chats/*/leave',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

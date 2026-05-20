@@ -59,6 +59,9 @@ class PersonaModelSeeder extends Seeder
             // Light tier — non-expert client & playful game designer
             'dragan' => 'gpt-4o-mini',
             'pixel' => 'gpt-4o-mini',
+            // Realist — feasibility judgment; Chair — final decision
+            'realist' => 'claude-sonnet-4-6',
+            'chair' => 'claude-opus-4-7',
         ];
 
         $modelIds = AiModel::query()->pluck('id', 'model_string');

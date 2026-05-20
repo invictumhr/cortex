@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
+import { useT } from '@/i18n/I18nProvider';
 
 export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, powershellEnabled }) {
+    const { t } = useT();
     const [text, setText] = useState('');
     const [url, setUrl] = useState('');
     const [showUrl, setShowUrl] = useState(false);
@@ -37,7 +39,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                 <input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://primjer.com/clanak"
+                    placeholder={t('input.urlPlaceholder')}
                     className="mb-2 w-full rounded-lg border-gray-300 text-sm"
                 />
             )}
@@ -52,15 +54,15 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                         }
                     }}
                     rows={2}
-                    placeholder="Poruka boardroomu — Enter šalje, Shift+Enter novi red"
+                    placeholder={t('input.placeholder')}
                     className="flex-1 resize-none rounded-xl border-gray-300 text-sm"
                 />
                 <div className="flex flex-col gap-1">
                     <div className="flex gap-1">
-                        <button onClick={() => fileRef.current?.click()} title="Priloži sliku" className="rounded-lg bg-gray-100 p-2 hover:bg-gray-200">📎</button>
-                        <button onClick={() => setShowUrl((v) => !v)} title="Priloži URL" className="rounded-lg bg-gray-100 p-2 hover:bg-gray-200">🔗</button>
+                        <button onClick={() => fileRef.current?.click()} title={t('input.attachImage')} className="rounded-lg bg-gray-100 p-2 hover:bg-gray-200">📎</button>
+                        <button onClick={() => setShowUrl((v) => !v)} title={t('input.attachUrl')} className="rounded-lg bg-gray-100 p-2 hover:bg-gray-200">🔗</button>
                         {powershellEnabled && (
-                            <button onClick={onPowerShell} title="PowerShell naredba" className="rounded-lg bg-gray-100 p-2 hover:bg-gray-200">⚡</button>
+                            <button onClick={onPowerShell} title={t('input.powershell')} className="rounded-lg bg-gray-100 p-2 hover:bg-gray-200">⚡</button>
                         )}
                     </div>
                     <button
@@ -68,7 +70,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                         disabled={disabled || sending || !text.trim()}
                         className="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
                     >
-                        {sending ? '…' : 'Pošalji'}
+                        {sending ? t('input.sending') : t('input.send')}
                     </button>
                 </div>
             </div>

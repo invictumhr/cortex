@@ -4,8 +4,8 @@
     {
       "name": "cortex",
       "runtimeExecutable": "php",
-      "runtimeArgs": ["artisan", "serve", "--port=8000"],
-      "port": 8000
+      "runtimeArgs": ["artisan", "serve", "--port=8888"],
+      "port": 8888
     }
   ]
 }

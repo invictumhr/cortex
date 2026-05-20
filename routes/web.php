@@ -31,8 +31,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/chats/{chat}/pause', [ChatActionController::class, 'pause'])->name('chats.pause');
     Route::post('/chats/{chat}/resume', [ChatActionController::class, 'resume'])->name('chats.resume');
-    Route::patch('/chats/{chat}/rounds', [ChatActionController::class, 'setRounds'])->name('chats.rounds');
-    Route::post('/chats/{chat}/add-rounds', [ChatActionController::class, 'addRounds'])->name('chats.add-rounds');
+    Route::post('/chats/{chat}/heartbeat', [ChatActionController::class, 'heartbeat'])->name('chats.heartbeat');
+    Route::post('/chats/{chat}/leave', [ChatActionController::class, 'leave'])->name('chats.leave');
 
     Route::post('/chats/{chat}/powershell', [PowerShellController::class, 'execute'])->name('chats.powershell');
 

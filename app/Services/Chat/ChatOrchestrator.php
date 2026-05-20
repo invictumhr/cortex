@@ -5,6 +5,7 @@ namespace App\Services\Chat;
 use App\Events\ChatMessageCreated;
 use App\Events\RoundCompleted;
 use App\Events\TurnCompleted;
+use App\Jobs\ConcludeDiscussion;
 use App\Jobs\GeneratePersonaResponse;
 use App\Models\Chat;
 use App\Models\ChatMessage;
@@ -40,11 +41,24 @@ class ChatOrchestrator
         }
 
         $chat->increment('total_messages');
-        $chat->update(['current_round' => 0, 'status' => Chat::STATUS_ACTIVE]);
-
         broadcast(new ChatMessageCreated($message->load('attachments')));
 
-        $this->startRound($chat->refresh(), $turn, 1);
+        // A continuous discussion that is already running just absorbs the
+        // message — the loop surfaces it to the personas in the next round.
+        if ($chat->continuous && $chat->status === Chat::STATUS_ACTIVE) {
+            return $message;
+        }
+
+        // Otherwise (re)start the loop: a paused continuous discussion picks
+        // up from its current round; a bounded turn opens fresh at round 1.
+        $nextRound = $chat->continuous ? ((int) $chat->current_round + 1) : 1;
+
+        $chat->update([
+            'status' => Chat::STATUS_ACTIVE,
+            'current_round' => $chat->continuous ? (int) $chat->current_round : 0,
+        ]);
+
+        $this->startRound($chat->refresh(), $turn, $nextRound);
 
         return $message;
     }
@@ -64,13 +78,9 @@ class ChatOrchestrator
             ->all();
 
         if ($speakerIds === []) {
+            $chat->update(['status' => Chat::STATUS_PAUSED]);
             broadcast(new RoundCompleted($chat, $round));
-
-            if ($round < (int) $chat->rounds_per_turn) {
-                $this->startRound($chat, $turn, $round + 1);
-            } else {
-                broadcast(new TurnCompleted($chat, 'no_personas'));
-            }
+            broadcast(new TurnCompleted($chat->refresh(), 'no_personas'));
 
             return;
         }
@@ -78,9 +88,18 @@ class ChatOrchestrator
         GeneratePersonaResponse::dispatch($chat->id, $turn, $round, $speakerIds, 0);
     }
 
-    public function pause(Chat $chat): void
+    /**
+     * Stop the discussion. An explicit user pause ($conclude = true) also
+     * triggers a final synthesis + Chair verdict for a continuous chat;
+     * a silent stop (leaving the page) just halts the loop.
+     */
+    public function pause(Chat $chat, bool $conclude = false): void
     {
         $chat->update(['status' => Chat::STATUS_PAUSED]);
+
+        if ($conclude && $chat->continuous) {
+            ConcludeDiscussion::dispatch($chat->id);
+        }
     }
 
     public function resume(Chat $chat): void
@@ -90,7 +109,7 @@ class ChatOrchestrator
         $turn = (int) ($chat->messages()->max('turn_number') ?? 1);
         $nextRound = (int) $chat->current_round + 1;
 
-        if ($nextRound <= (int) $chat->rounds_per_turn) {
+        if ($chat->continuous || $nextRound <= (int) $chat->rounds_per_turn) {
             $this->startRound($chat, $turn, $nextRound);
         } else {
             broadcast(new TurnCompleted($chat, 'completed'));

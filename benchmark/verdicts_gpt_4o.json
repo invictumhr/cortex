@@ -1,0 +1,272 @@
+[
+    {
+        "id": 1,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 7,
+        "score_single": 9,
+        "reason": "Answer 1 provides a more structured and detailed analysis of the trade-offs involved in migrating from a monolith to microservices. It clearly outlines the benefits and drawbacks, emphasizing the operational challenges and potential pitfalls of such a migration for a 30-person team. The recommendation to focus on modularizing the monolith first is well-supported with specific strategies and criteria for when to consider service extraction. Answer 2, while comprehensive, lacks the same level of clarity in presenting the risks and trade-offs, and its structure is less coherent, making it harder to extract key insights."
+    },
+    {
+        "id": 2,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 2 provides a more nuanced exploration of the trade-offs and risks associated with each database option. It highlights the importance of understanding read patterns, compliance requirements, and deduplication needs before making a decision, which are critical factors that could significantly impact the choice of database. Additionally, it discusses potential disagreements and open questions, offering a more comprehensive view of the complexities involved in the decision-making process. Answer 1, while detailed, focuses more on the technical capabilities of ClickHouse without addressing these broader considerations as thoroughly."
+    },
+    {
+        "id": 3,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive framework for deciding between a rewrite and incremental refactoring, clearly outlining specific criteria and risks associated with each approach. It surfaces non-obvious angles such as the 'second-system effect' and the 'Joel Spolsky risk,' which are critical considerations often overlooked. Answer 2, while detailed, is less structured and mixes decision criteria with team opinions, making it harder to extract clear decision-making guidelines. It also lacks the explicit trade-off analysis present in Answer 1."
+    },
+    {
+        "id": 4,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 8,
+        "reason": "Answer 1 provides a comprehensive exploration of both the benefits and drawbacks of feature flags, highlighting specific scenarios where they are beneficial and where they can become problematic. It surfaces real tensions such as the combinatorial state explosion and the risk of the flag system becoming critical infrastructure. Answer 2, while detailed, is more focused on operationalizing feature flags and lacks the depth in exploring the inherent trade-offs and risks associated with their use. It also introduces a lot of organizational dynamics without clearly tying them back to the core technical issues."
+    },
+    {
+        "id": 5,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 6,
+        "reason": "Answer 1 provides a comprehensive analysis of the monorepo vs polyrepo decision, highlighting various tensions, trade-offs, and risks. It considers organizational factors, tooling investments, and potential pitfalls like tight coupling and CI/CD costs. The answer also outlines specific steps and questions to guide the decision-making process, making it more nuanced and practical. In contrast, Answer 2, while confident in recommending a monorepo, lacks depth in exploring the complexities and potential downsides of each approach, focusing more on the benefits of a monorepo without equally weighing the risks."
+    },
+    {
+        "id": 6,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 1,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive analysis of the trade-offs, risks, and considerations for choosing between REST, GraphQL, and tRPC for an internal API in 2026. It discusses client topology, language coupling, data shape, team size, caching, and observability, offering specific scenarios where each technology excels or falls short. Answer 2 lacks any substantive content or analysis, making it impossible to evaluate tensions or trade-offs."
+    },
+    {
+        "id": 7,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 2 surfaces a broader range of tensions and trade-offs, such as the need for requirements validation before architecture design, the build-vs-buy decision, and compliance constraints. It also highlights the ambiguity in the 99.9% delivery definition and the importance of failure mode testing. Answer 1 provides a detailed technical architecture but lacks discussion on the underlying assumptions and potential pitfalls in the requirements and operational aspects."
+    },
+    {
+        "id": 8,
+        "category": "tech_strategy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 8,
+        "reason": "Answer 1 provides a detailed analysis of the trade-offs between adopting React Server Components and sticking with a plain SPA. It highlights specific scenarios where each approach might be more beneficial, such as SEO considerations and team expertise, and discusses potential risks like caching issues and vendor lock-in. Answer 2, while offering a broader discussion with multiple perspectives, lacks the same depth in exploring specific technical and operational challenges, making it less effective in surfacing non-obvious angles."
+    },
+    {
+        "id": 9,
+        "category": "business",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 7,
+        "score_single": 9,
+        "reason": "Answer 1 provides a clear, structured approach to the decision, emphasizing the importance of understanding pricing power before making a significant financial commitment like hiring. It highlights the risks of hiring too early, such as reduced runway and the potential for misaligned priorities, and offers a detailed plan for executing a price increase. Answer 2, while comprehensive, is less focused and introduces many variables and considerations that could complicate decision-making without providing a clear path forward. Answer 1 better surfaces the trade-offs and risks associated with each option."
+    },
+    {
+        "id": 10,
+        "category": "business",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive analysis of the factors to consider when introducing a paid enterprise tier, including demand signals, project maturity, and market signals. It also highlights key risks such as community backlash and cannibalizing adoption, which are crucial for understanding the trade-offs involved. Answer 2, while detailed, is less structured and more focused on internal disagreements and procedural steps, which makes it harder to extract clear tensions and trade-offs."
+    },
+    {
+        "id": 11,
+        "category": "business",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 2 provides a more nuanced exploration of the build vs. buy decision by incorporating diverse perspectives and highlighting specific disagreements among stakeholders. It surfaces non-obvious angles such as the impact of organizational politics, the importance of integration test coverage, and the potential for accounting illusions to skew decisions. Additionally, it outlines concrete next steps and decision gates, offering a structured approach to resolving the tensions identified. Answer 1, while thorough, lacks the depth of stakeholder analysis and the exploration of hidden costs and biases present in Answer 2."
+    },
+    {
+        "id": 12,
+        "category": "business",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 2 provides a more nuanced exploration of the potential causes for the disconnect between DAU and revenue, including the possibility of payment flow issues and the need for qualitative user interviews to understand user behavior and willingness to pay. It also highlights disagreements among stakeholders and outlines a clear diagnostic sequence before making strategic changes, which surfaces real tensions and trade-offs. Answer 1, while detailed, focuses more on a structured plan without delving as deeply into the complexities and potential disagreements that might arise."
+    },
+    {
+        "id": 13,
+        "category": "business",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive framework for decision-making, highlighting key risks and trade-offs associated with both extending runway and increasing spend. It surfaces non-obvious angles such as the importance of scalable unit economics and the potential pitfalls of vanity metrics. Answer 2, while detailed, is less structured and focuses heavily on infrastructure readiness, which may not be the primary concern for a startup at this stage. Answer 1 offers a balanced approach with practical steps, making it more actionable and insightful."
+    },
+    {
+        "id": 14,
+        "category": "business",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 8,
+        "reason": "Answer 1 provides a clear recommendation with a structured analysis of the trade-offs between sales-led growth and self-serve onboarding. It highlights specific risks and benefits associated with each approach, offering a phased strategy that considers the company's current stage and customer base. Answer 2, while detailed, is more fragmented and lacks a cohesive recommendation, making it harder to discern a clear path forward. It surfaces many considerations but does not effectively prioritize them or provide a decisive course of action."
+    },
+    {
+        "id": 15,
+        "category": "eng_management",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive framework that surfaces multiple tensions and trade-offs, such as the risk of skill atrophy, review fatigue, and the potential for hidden coupling failures. It also highlights non-obvious angles like the importance of verifiability and the potential for architectural drift. Answer 2, while detailed, primarily lists ideas and lacks a cohesive framework, making it less effective at surfacing the underlying tensions and trade-offs in the decision-making process."
+    },
+    {
+        "id": 16,
+        "category": "eng_management",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 8,
+        "score_single": 6,
+        "reason": "Answer 1 provides a comprehensive exploration of the trade-offs, risks, and considerations involved in deciding between fine-tuning a smaller open model and using prompt engineering on a frontier closed model. It delves into specific scenarios, potential pitfalls, and operational challenges, such as infrastructure scaling and monitoring overhead, which are crucial for making an informed decision. Answer 2, while structured and informative, lacks the depth in exploring the nuanced risks and operational complexities that Answer 1 addresses."
+    },
+    {
+        "id": 17,
+        "category": "eng_management",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 6,
+        "reason": "Answer 1 provides a comprehensive exploration of the tensions and trade-offs involved in designing a code review process. It discusses various mechanisms, potential disagreements, and the need for a baseline to determine if code review is the right intervention. It also considers the risk of skill atrophy and the importance of balancing quick wins with long-term strategies. Answer 2, while structured and clear, lacks the depth of analysis on potential risks and trade-offs, focusing more on procedural recommendations without addressing the underlying challenges as thoroughly."
+    },
+    {
+        "id": 18,
+        "category": "eng_management",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 1 provides a comprehensive exploration of the issue, highlighting various perspectives and potential trade-offs. It acknowledges the risks of enforcing testing standards, such as potential loss of a high-output engineer, and considers alternative approaches like pairing and skill-building. Answer 2, while clear and decisive, lacks the depth of analysis and consideration of non-obvious angles, such as the potential for shadow technical debt or the nuances of risk-weighted testing gates."
+    },
+    {
+        "id": 19,
+        "category": "eng_management",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 1 provides a detailed and structured framework for promotion, clearly outlining the expectations across multiple dimensions such as scope, technical judgment, impact, and force multiplication. It also addresses potential risks and pitfalls, such as promoting based on tenure or likeability, which are crucial considerations in a startup environment. Answer 2, while comprehensive, is less structured and more abstract, making it harder to extract concrete criteria and lacks the same level of clarity in addressing trade-offs and risks."
+    },
+    {
+        "id": 20,
+        "category": "policy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 8,
+        "reason": "Answer 1 provides a structured analysis of the issue, clearly outlining both sides of the argument and identifying key trade-offs. It proposes a nuanced position that considers the complexities of platform liability, including the potential chilling effects on speech and the risk of entrenching incumbents. Answer 2, while detailed, is less focused and introduces numerous ideas without clearly prioritizing them or addressing the core tensions as effectively. The discussion in Answer 2 is more fragmented, making it harder to discern a coherent stance or solution."
+    },
+    {
+        "id": 21,
+        "category": "policy",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 1 provides a comprehensive analysis of the complexities and challenges associated with implementing a Universal Basic Income (UBI). It highlights the need for structured experiments, the importance of defining success metrics, and the technical challenges of implementation, such as supporting unbanked populations. It also discusses the potential for wage suppression and the necessity of comparative analysis with other welfare models. Answer 2, while structured and clear, lacks the depth of exploration into the technical and practical challenges and does not address the nuanced trade-offs as thoroughly as Answer 1."
+    },
+    {
+        "id": 22,
+        "category": "policy",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 8,
+        "score_single": 6,
+        "reason": "Answer 1 provides a more nuanced exploration of the complexities involved in making a public commitment against building weapons systems. It surfaces real tensions such as the dual-use reality, the challenges of defining 'weapons,' and the strategic implications for talent retention and market positioning. It also considers the operational feasibility and regulatory challenges, offering multiple strategic paths and acknowledging internal disagreements. Answer 2, while clear, lacks depth in exploring the trade-offs and risks, particularly around the operational and strategic implications of such a commitment."
+    },
+    {
+        "id": 23,
+        "category": "policy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive framework for balancing privacy and personalization, highlighting specific technological advancements and regulatory changes that influence this balance. It also outlines potential risks and trade-offs, such as competitive disadvantages and consent fatigue, offering a nuanced view of the challenges involved. Answer 2, while detailed, is more fragmented and lacks a clear, cohesive strategy, making it harder to discern the real tensions and trade-offs in the privacy-personalization debate."
+    },
+    {
+        "id": 24,
+        "category": "policy",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 7,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive and structured approach to the evolving role of software engineers in the age of AI, highlighting specific areas for growth such as systems-level judgment, AI fluency, and human-leverage skills. It also addresses potential risks and trade-offs, offering a balanced view of the challenges and opportunities. Answer 2, while detailed, is less organized and more fragmented, with a focus on individual opinions and lacks a clear, cohesive strategy. It also introduces some non-obvious angles but doesn't integrate them as effectively into a unified plan."
+    },
+    {
+        "id": 25,
+        "category": "open_analysis",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 7,
+        "score_single": 9,
+        "reason": "Answer 1 provides a comprehensive analysis of the factors contributing to the plateau in remote work adoption, highlighting specific tensions such as the uneven productivity gains, principal-agent problems, and commercial real estate pressures. It also discusses the risks and trade-offs of pushing further towards fully remote work, offering a balanced view of the situation. Answer 2, while it presents a range of perspectives and identifies key issues, lacks the depth and specificity in exploring the underlying tensions and trade-offs, making it less effective in surfacing non-obvious angles."
+    },
+    {
+        "id": 26,
+        "category": "open_analysis",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 8,
+        "reason": "Answer 1 provides a clear argument for why text-based interfaces will remain dominant, considering social, technical, and market factors. It also acknowledges potential risks and alternative scenarios, such as breakthroughs in wearables or agentic computing. Answer 2, while detailed, is more fragmented and lacks a cohesive argument, focusing instead on internal disagreements and lacks a clear conclusion on the dominant paradigm. Answer 1 better surfaces the trade-offs and risks associated with each interface modality."
+    },
+    {
+        "id": 27,
+        "category": "open_analysis",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 8,
+        "reason": "Answer 2 provides a clearer distinction between the economic and technological aspects of the AI market, highlighting the risks of overinvestment in infrastructure and the potential for a valuation bubble. It also considers the historical context of similar technological revolutions, offering a nuanced view of the situation. Answer 1, while detailed, is less focused on the broader economic implications and more on specific operational challenges, which may not fully capture the macro-level tensions and trade-offs."
+    },
+    {
+        "id": 28,
+        "category": "open_analysis",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 1 provides a comprehensive analysis of the structural issues affecting enterprise software UX, including buyer-user misalignment, incentive structures, and the impact of compliance and customization. It surfaces non-obvious angles such as the role of PLG companies and the potential for contractual UX SLAs. Answer 2, while insightful, focuses more on the general problems without delving as deeply into the trade-offs and potential solutions. It lacks the depth of exploration into how these issues might be addressed or tested, which Answer 1 provides."
+    },
+    {
+        "id": 29,
+        "category": "open_analysis",
+        "judge": "gpt-4o",
+        "winner": "boardroom",
+        "score_boardroom": 9,
+        "score_single": 7,
+        "reason": "Answer 1 provides a comprehensive analysis of the potential for a 4-day workweek to become mainstream by 2030, highlighting various sectors, organizational prerequisites, and potential risks. It surfaces non-obvious angles such as the importance of async maturity and decision-cycle-time, and the hidden costs related to incident response. Answer 2, while also well-structured, focuses more on general trends and lacks the depth in exploring specific organizational challenges and trade-offs that Answer 1 provides."
+    },
+    {
+        "id": 30,
+        "category": "open_analysis",
+        "judge": "gpt-4o",
+        "winner": "single model",
+        "score_boardroom": 6,
+        "score_single": 9,
+        "reason": "Answer 2 better surfaces the real tensions and trade-offs by distinguishing between different types of evidence and their implications for AGI timelines. It highlights the capability-reliability gap, economic viability issues, and the risks of selection bias and definitional drift. Answer 1, while detailed, focuses more on operational and business execution issues without clearly connecting these to AGI timeline implications. Answer 2 provides a nuanced view that considers both the limitations of current models and the potential for future breakthroughs, offering a balanced perspective on the evidence."
+    }
+]

@@ -8,6 +8,7 @@ use App\Services\Chat\ChatOrchestrator;
 use App\Services\UrlFetcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Gate;
 
 class ChatMessageController extends Controller
@@ -60,6 +61,9 @@ class ChatMessageController extends Controller
                 return response()->json(['ok' => false, 'error' => 'URL nije dohvaćen: '.$e->getMessage()], 422);
             }
         }
+
+        // The user is on the page — keep the continuous loop alive.
+        Cache::put('cortex:heartbeat:'.$chat->id, true, 50);
 
         try {
             $message = $this->orchestrator->sendUserMessage(

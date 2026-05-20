@@ -18,6 +18,7 @@ class CortexFeedback extends Command
         {rating : Ocjena korisnosti 1-5}
         {--note= : Kratak komentar}
         {--ideas= : Korisne ideje, odvojene zarezom}
+        {--used= : Ideje koje su STVARNO implementirane, odvojene zarezom}
         {--source=cli : Izvor povratne informacije (cli|agent|ui)}
         {--json : Strojno-čitljiv JSON izlaz}';
 
@@ -38,12 +39,14 @@ class CortexFeedback extends Command
         }
 
         $ideas = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('ideas')))));
+        $used = array_values(array_filter(array_map('trim', explode(',', (string) $this->option('used')))));
 
         $feedback = ChatFeedback::create([
             'chat_id' => $chat->id,
             'rating' => $rating,
             'comment' => $this->option('note'),
             'helpful_ideas' => $ideas,
+            'used_ideas' => $used,
             'source' => $this->option('source') ?: 'cli',
         ]);
 
@@ -55,6 +58,7 @@ class CortexFeedback extends Command
                 'feedback_id' => $feedback->id,
                 'chat_id' => $chat->id,
                 'rating' => $rating,
+                'used_ideas' => $used,
                 'chat_average_rating' => $average,
             ], JSON_UNESCAPED_UNICODE), OutputInterface::OUTPUT_RAW);
         } else {

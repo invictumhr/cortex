@@ -25,6 +25,8 @@ class Persona extends Model
         'expertise_areas',
         'communication_style',
         'is_scribe',
+        'is_chair',
+        'is_ephemeral',
         'is_active',
         'sort_order',
     ];
@@ -35,6 +37,8 @@ class Persona extends Model
             'personality_traits' => 'array',
             'expertise_areas' => 'array',
             'is_scribe' => 'boolean',
+            'is_chair' => 'boolean',
+            'is_ephemeral' => 'boolean',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
         ];
@@ -70,6 +74,6 @@ class Persona extends Model
 
     public function scopeSpeakers(Builder $query): Builder
     {
-        return $query->where('is_scribe', false);
+        return $query->where('is_scribe', false)->where('is_chair', false);
     }
 }

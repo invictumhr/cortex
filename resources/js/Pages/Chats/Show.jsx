@@ -5,6 +5,7 @@ import ChatSidebar from '@/Components/Cortex/ChatSidebar';
 import MessageBubble from '@/Components/Cortex/MessageBubble';
 import PersonaInfoPanel from '@/Components/Cortex/PersonaInfoPanel';
 import PowerShellModal from '@/Components/Cortex/PowerShellModal';
+import { useT } from '@/i18n/I18nProvider';
 
 export default function Show({
     chat: initialChat,
@@ -12,14 +13,13 @@ export default function Show({
     allPersonas,
     chats,
     powershellEnabled,
-    roundPresets,
 }) {
+    const { t } = useT();
     const [chat, setChat] = useState(initialChat);
     const [messages, setMessages] = useState(initialMessages);
     const [personas, setPersonas] = useState(initialChat.personas ?? []);
     const [typing, setTyping] = useState(null);
     const [sending, setSending] = useState(false);
-    const [turnRunning, setTurnRunning] = useState(false);
     const [showPs, setShowPs] = useState(false);
 
     const scrollRef = useRef(null);
@@ -47,12 +47,11 @@ export default function Show({
         });
 
         channel.listen('.round.completed', (e) => {
-            setChat((c) => ({ ...c, current_round: e.current_round, rounds_per_turn: e.rounds_per_turn }));
+            setChat((c) => ({ ...c, current_round: e.current_round }));
         });
 
         channel.listen('.turn.completed', (e) => {
             setTyping(null);
-            setTurnRunning(false);
             setChat((c) => ({ ...c, status: e.status }));
         });
 
@@ -70,6 +69,21 @@ export default function Show({
         return () => window.Echo.leave(`chat.${chat.id}`);
     }, [chat.id]);
 
+    useEffect(() => {
+        const ping = () => window.axios.post(`/chats/${chat.id}/heartbeat`).catch(() => {});
+        const leave = () => navigator.sendBeacon(`/chats/${chat.id}/leave`);
+
+        ping();
+        const timer = setInterval(ping, 20000);
+        window.addEventListener('pagehide', leave);
+
+        return () => {
+            clearInterval(timer);
+            window.removeEventListener('pagehide', leave);
+            leave();
+        };
+    }, [chat.id]);
+
     const sendMessage = async ({ content, url, image }) => {
         setSending(true);
         const form = new FormData();
@@ -83,10 +97,9 @@ export default function Show({
                 seenIds.current.add(data.message.id);
                 setMessages((prev) => [...prev, data.message]);
             }
-            setTurnRunning(true);
             setChat((c) => ({ ...c, status: 'active' }));
         } catch (err) {
-            window.alert(err.response?.data?.error || 'Slanje poruke nije uspjelo.');
+            window.alert(err.response?.data?.error || t('show.sendFailed'));
         } finally {
             setSending(false);
         }
@@ -97,26 +110,18 @@ export default function Show({
         setPersonas(data.personas);
     };
 
-    const setRounds = async (n) => {
-        await window.axios.patch(`/chats/${chat.id}/rounds`, { rounds_per_turn: n });
-        setChat((c) => ({ ...c, rounds_per_turn: n }));
-    };
-
-    const addRounds = async (n) => {
-        const { data } = await window.axios.post(`/chats/${chat.id}/add-rounds`, { rounds: n });
-        setChat((c) => ({ ...c, rounds_per_turn: data.rounds_per_turn }));
-    };
-
-    const pause = async () => {
-        await window.axios.post(`/chats/${chat.id}/pause`);
+    const pause = () => {
         setChat((c) => ({ ...c, status: 'paused' }));
+        window.axios.post(`/chats/${chat.id}/pause`).catch(() => {});
     };
 
-    const resume = async () => {
-        await window.axios.post(`/chats/${chat.id}/resume`);
-        setTurnRunning(true);
+    const resume = () => {
         setChat((c) => ({ ...c, status: 'active' }));
+        window.axios.post(`/chats/${chat.id}/resume`).catch(() => {});
     };
+
+    const running = chat.status === 'active';
+    const started = messages.length > 0;
 
     return (
         <>
@@ -125,29 +130,30 @@ export default function Show({
                 <ChatSidebar chats={chats} activeId={chat.id} />
 
                 <main className="flex min-w-0 flex-1 flex-col">
-                    <header className="flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
+                    <header className="flex items-center justify-between gap-3 border-b border-gray-200 bg-white px-5 py-3">
                         <div className="min-w-0">
                             <h1 className="truncate font-semibold text-gray-800">{chat.title}</h1>
                             {chat.description && (
                                 <p className="truncate text-xs text-gray-400">{chat.description}</p>
                             )}
                         </div>
-                        <span
-                            className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                chat.status === 'active'
-                                    ? 'bg-emerald-100 text-emerald-700'
-                                    : 'bg-amber-100 text-amber-700'
-                            }`}
-                        >
-                            {chat.status}
-                        </span>
+                        {started && (
+                            <button
+                                onClick={running ? pause : resume}
+                                className={`flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                                    running
+                                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                                        : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                }`}
+                            >
+                                {running ? t('show.pause') : t('show.resume')}
+                            </button>
+                        )}
                     </header>
 
                     <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-5">
                         {messages.length === 0 && (
-                            <p className="mt-10 text-center text-sm text-gray-400">
-                                Pošalji prvu poruku da pokreneš raspravu.
-                            </p>
+                            <p className="mt-10 text-center text-sm text-gray-400">{t('show.empty')}</p>
                         )}
                         {messages.map((m) => (
                             <MessageBubble key={m.id} message={m} animate={animateIds.current.has(m.id)} />
@@ -155,13 +161,15 @@ export default function Show({
                         {typing && (
                             <div className="flex items-center gap-2 pl-12 text-xs text-gray-400">
                                 <span className="animate-pulse text-base">●</span>
-                                {typing.name} razmišlja… (krug {typing.round})
+                                {t('show.typing', { name: typing.name, round: typing.round })}
                             </div>
+                        )}
+                        {started && !running && !typing && (
+                            <div className="pl-12 text-xs text-gray-400">{t('show.pausedHint')}</div>
                         )}
                     </div>
 
                     <ChatInputBar
-                        disabled={turnRunning}
                         sending={sending}
                         powershellEnabled={powershellEnabled}
                         onSend={sendMessage}
@@ -173,12 +181,7 @@ export default function Show({
                     chat={chat}
                     chatPersonas={personas}
                     allPersonas={allPersonas}
-                    presets={roundPresets}
                     onToggle={togglePersona}
-                    onSetRounds={setRounds}
-                    onAddRounds={addRounds}
-                    onPause={pause}
-                    onResume={resume}
                 />
 
                 {showPs && <PowerShellModal chatId={chat.id} onClose={() => setShowPs(false)} />}

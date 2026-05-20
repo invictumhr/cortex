@@ -22,17 +22,26 @@ class GoogleAdapter extends AbstractAdapter
             $contents[] = $this->formatMessage($message);
         }
 
+        $generationConfig = [
+            'maxOutputTokens' => (int) ($options['max_tokens'] ?? 1500),
+        ];
+
+        // Gemini 2.5 Flash spends the output budget on internal "thinking",
+        // which truncates the visible answer; disable it so the whole budget
+        // goes to the reply.
+        if (str_contains($this->modelString(), 'flash')) {
+            $generationConfig['thinkingConfig'] = ['thinkingBudget' => 0];
+        }
+
+        if (isset($options['temperature'])) {
+            $generationConfig['temperature'] = (float) $options['temperature'];
+        }
+
         $payload = [
             'system_instruction' => ['parts' => [['text' => $systemPrompt]]],
             'contents' => $contents,
-            'generationConfig' => [
-                'maxOutputTokens' => (int) ($options['max_tokens'] ?? 1500),
-            ],
+            'generationConfig' => $generationConfig,
         ];
-
-        if (isset($options['temperature'])) {
-            $payload['generationConfig']['temperature'] = (float) $options['temperature'];
-        }
 
         $url = $this->baseUrl().'/v1beta/models/'.$this->modelString().':generateContent';
 

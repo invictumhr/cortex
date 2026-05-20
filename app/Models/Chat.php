@@ -19,7 +19,12 @@ class Chat extends Model
         'user_id',
         'title',
         'description',
+        'context',
+        'constraints',
+        'strong',
         'rounds_per_turn',
+        'continuous',
+        'language',
         'current_round',
         'total_messages',
         'total_input_tokens',
@@ -33,7 +38,9 @@ class Chat extends Model
     protected function casts(): array
     {
         return [
+            'strong' => 'boolean',
             'rounds_per_turn' => 'integer',
+            'continuous' => 'boolean',
             'current_round' => 'integer',
             'total_messages' => 'integer',
             'total_input_tokens' => 'integer',

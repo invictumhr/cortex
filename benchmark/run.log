@@ -1,0 +1,62 @@
+[05:30:51] starting; 30 question(s), 0 already done
+[05:30:51] [1/30] q1: Should a 30-person SaaS team migrate from a Rails monolith to microservices? Make the stro
+[05:34:15]   -> winner=?, 204.0s, cost B=0.3840 S=0.1144, eta 5916s
+[05:34:15] [2/30] q2: For a high-write event log handling 10,000 events per second, compare PostgreSQL with part
+[05:37:34]   -> winner=?, 199.6s, cost B=0.3600 S=0.1146, eta 5650s
+[05:37:34] [3/30] q3: When does it actually pay off to rewrite a working codebase from scratch versus incrementa
+[05:42:43]   -> winner=?, 308.8s, cost B=0.3373 S=0.1143, eta 6411s
+[05:42:43] [4/30] q4: Argue both sides of feature flags as an engineering practice: when do they earn their keep
+[05:45:35]   -> winner=jedan model, 171.8s, cost B=0.3160 S=0.1143, eta 5747s
+[05:45:35] [5/30] q5: Monorepo vs polyrepo for a team of 40 engineers across 5 services: which architecture and 
+[05:48:37]   -> winner=jedan model, 182.0s, cost B=0.3162 S=0.1142, eta 5331s
+[05:48:37] [6/30] q6: REST vs GraphQL vs tRPC for a new internal API in 2026: what determines the right choice?
+[05:49:44]   -> winner=jedan model, 67.3s, cost B=0.0588 S=0.1142, eta 4534s
+[05:49:44] [7/30] q7: How would you architect a real-time notification system for 10 million users with 99.9% de
+[05:52:43]   -> winner=boardroom, 178.8s, cost B=0.3414 S=0.1143, eta 4312s
+[05:52:43] [8/30] q8: Should a startup adopt React Server Components or stick with a plain SPA for a new product
+[05:55:28]   -> winner=boardroom, 165.4s, cost B=0.2852 S=0.1143, eta 4064s
+[05:55:28] [9/30] q9: An indie SaaS at $20k MRR has 12 months of runway. Should the founder hire one engineer or
+[05:58:31]   -> winner=jedan model, 182.8s, cost B=0.2965 S=0.1080, eta 3875s
+[05:58:31] [10/30] q10: When should an open-source project introduce a paid 'enterprise' tier? What signals indica
+[06:01:39]   -> winner=jedan model, 187.6s, cost B=0.3208 S=0.1142, eta 3696s
+[06:01:39] [11/30] q11: Build vs buy for internal tooling at a 100-person company: what factors actually decide?
+[06:04:57]   -> winner=boardroom, 197.7s, cost B=0.3658 S=0.1141, eta 3534s
+[06:04:57] [12/30] q12: An app's North Star metric is daily active users but revenue is not following. Diagnose th
+[06:08:03]   -> winner=boardroom, 185.9s, cost B=0.3244 S=0.1143, eta 3348s
+[06:08:03] [13/30] q13: How should a startup with 12 months of runway decide between extending runway and doubling
+[06:11:02]   -> winner=jedan model, 179.5s, cost B=0.3097 S=0.1142, eta 3153s
+[06:11:02] [14/30] q14: Should a B2B SaaS at 50 customers prioritize self-serve onboarding or invest in sales-led 
+[06:14:14]   -> winner=jedan model, 191.6s, cost B=0.3414 S=0.1144, eta 2975s
+[06:14:14] [15/30] q15: How should an engineering manager decide which work goes to AI coding agents versus human 
+[06:17:23]   -> winner=jedan model, 189.2s, cost B=0.3345 S=0.1142, eta 2792s
+[06:17:23] [16/30] q16: When is it worth fine-tuning a smaller open model versus sticking with prompt engineering 
+[06:20:20]   -> winner=jedan model, 177.0s, cost B=0.3011 S=0.1143, eta 2598s
+[06:20:20] [17/30] q17: Design a code review process for a 20-person team that catches real bugs without burning e
+[06:23:46]   -> winner=boardroom, 206.3s, cost B=0.3516 S=0.1140, eta 2428s
+[06:23:46] [18/30] q18: What is the right way to handle a 10x engineer who refuses to write tests? Decide and just
+[06:26:40]   -> winner=jedan model, 173.6s, cost B=0.2882 S=0.1139, eta 2233s
+[06:26:40] [19/30] q19: Define the bar for promotion from L4 to L5 engineer at a Series-B startup. Be concrete.
+[06:29:46]   -> winner=jedan model, 186.2s, cost B=0.3299 S=0.1142, eta 2047s
+[06:29:46] [20/30] q20: Should social platforms be legally liable for harmful AI-generated content posted by their
+[06:32:47]   -> winner=jedan model, 181.6s, cost B=0.3512 S=0.1143, eta 1858s
+[06:32:47] [21/30] q21: Universal basic income: strongest case for, strongest case against, your verdict.
+[06:36:07]   -> winner=jedan model, 199.9s, cost B=0.3361 S=0.1141, eta 1679s
+[06:36:07] [22/30] q22: Should a tech company publicly commit to never building weapons systems? Weigh the pros an
+[06:39:10]   -> winner=jedan model, 183.2s, cost B=0.3038 S=0.1142, eta 1491s
+[06:39:10] [23/30] q23: Where should the line be drawn between privacy and personalization for consumer apps in 20
+[06:42:23]   -> winner=jedan model, 192.5s, cost B=0.3195 S=0.1141, eta 1306s
+[06:42:23] [24/30] q24: When AI agents take over routine coding tasks, what should mid-career software engineers f
+[06:45:11]   -> winner=boardroom, 168.0s, cost B=0.2990 S=0.1142, eta 1115s
+[06:45:11] [25/30] q25: Why has fully remote work adoption plateaued despite clear productivity benefits for many 
+[06:48:04]   -> winner=boardroom, 172.8s, cost B=0.3116 S=0.1142, eta 927s
+[06:48:04] [26/30] q26: What is the most likely dominant computing interface paradigm by 2030: voice, text, AR, or
+[06:51:02]   -> winner=jedan model, 178.2s, cost B=0.3015 S=0.1101, eta 740s
+[06:51:02] [27/30] q27: Strongest argument that we are in an AI bubble. Strongest argument that we are not. Your v
+[06:53:52]   -> winner=jedan model, 170.1s, cost B=0.3350 S=0.1092, eta 553s
+[06:53:52] [28/30] q28: Why do most enterprise software products feel terrible to use compared to consumer apps? D
+[06:57:02]   -> winner=jedan model, 190.1s, cost B=0.3312 S=0.1142, eta 369s
+[06:57:02] [29/30] q29: Will the 4-day workweek become mainstream by 2030? Make the case.
+[06:59:58]   -> winner=jedan model, 175.8s, cost B=0.3039 S=0.1141, eta 184s
+[06:59:58] [30/30] q30: What does the high failure rate of AI 'agent startups' over the past two years actually te
+[07:03:04]   -> winner=jedan model, 186.4s, cost B=0.3088 S=0.1097, eta 0s
+[07:03:04] DONE

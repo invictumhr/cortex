@@ -1,0 +1,36 @@
+[
+  {"id": 1, "category": "tech_strategy", "question": "Should a 30-person SaaS team migrate from a Rails monolith to microservices? Make the strongest case for and against, then take a position."},
+  {"id": 2, "category": "tech_strategy", "question": "For a high-write event log handling 10,000 events per second, compare PostgreSQL with partitioning, ClickHouse, and DynamoDB. Recommend one and justify."},
+  {"id": 3, "category": "tech_strategy", "question": "When does it actually pay off to rewrite a working codebase from scratch versus incrementally refactor? Give concrete decision criteria."},
+  {"id": 4, "category": "tech_strategy", "question": "Argue both sides of feature flags as an engineering practice: when do they earn their keep and when do they become technical debt?"},
+  {"id": 5, "category": "tech_strategy", "question": "Monorepo vs polyrepo for a team of 40 engineers across 5 services: which architecture and why?"},
+  {"id": 6, "category": "tech_strategy", "question": "REST vs GraphQL vs tRPC for a new internal API in 2026: what determines the right choice?"},
+  {"id": 7, "category": "tech_strategy", "question": "How would you architect a real-time notification system for 10 million users with 99.9% delivery and sub-1-second latency?"},
+  {"id": 8, "category": "tech_strategy", "question": "Should a startup adopt React Server Components or stick with a plain SPA for a new product launching in 2026? Take a side."},
+
+  {"id": 9, "category": "business", "question": "An indie SaaS at $20k MRR has 12 months of runway. Should the founder hire one engineer or raise prices by 50 percent? Decide and justify."},
+  {"id": 10, "category": "business", "question": "When should an open-source project introduce a paid 'enterprise' tier? What signals indicate it is the right time?"},
+  {"id": 11, "category": "business", "question": "Build vs buy for internal tooling at a 100-person company: what factors actually decide?"},
+  {"id": 12, "category": "business", "question": "An app's North Star metric is daily active users but revenue is not following. Diagnose the likely causes and recommend a fix."},
+  {"id": 13, "category": "business", "question": "How should a startup with 12 months of runway decide between extending runway and doubling spend on a promising growth channel?"},
+  {"id": 14, "category": "business", "question": "Should a B2B SaaS at 50 customers prioritize self-serve onboarding or invest in sales-led growth? Recommend."},
+
+  {"id": 15, "category": "eng_management", "question": "How should an engineering manager decide which work goes to AI coding agents versus human engineers in 2026?"},
+  {"id": 16, "category": "eng_management", "question": "When is it worth fine-tuning a smaller open model versus sticking with prompt engineering on a frontier closed model?"},
+  {"id": 17, "category": "eng_management", "question": "Design a code review process for a 20-person team that catches real bugs without burning engineers out."},
+  {"id": 18, "category": "eng_management", "question": "What is the right way to handle a 10x engineer who refuses to write tests? Decide and justify."},
+  {"id": 19, "category": "eng_management", "question": "Define the bar for promotion from L4 to L5 engineer at a Series-B startup. Be concrete."},
+
+  {"id": 20, "category": "policy", "question": "Should social platforms be legally liable for harmful AI-generated content posted by their users? Argue both sides and take a position."},
+  {"id": 21, "category": "policy", "question": "Universal basic income: strongest case for, strongest case against, your verdict."},
+  {"id": 22, "category": "policy", "question": "Should a tech company publicly commit to never building weapons systems? Weigh the pros and cons, then decide."},
+  {"id": 23, "category": "policy", "question": "Where should the line be drawn between privacy and personalization for consumer apps in 2026?"},
+  {"id": 24, "category": "policy", "question": "When AI agents take over routine coding tasks, what should mid-career software engineers focus on building next?"},
+
+  {"id": 25, "category": "open_analysis", "question": "Why has fully remote work adoption plateaued despite clear productivity benefits for many roles?"},
+  {"id": 26, "category": "open_analysis", "question": "What is the most likely dominant computing interface paradigm by 2030: voice, text, AR, or something else? Defend your answer."},
+  {"id": 27, "category": "open_analysis", "question": "Strongest argument that we are in an AI bubble. Strongest argument that we are not. Your verdict."},
+  {"id": 28, "category": "open_analysis", "question": "Why do most enterprise software products feel terrible to use compared to consumer apps? Diagnose the root causes."},
+  {"id": 29, "category": "open_analysis", "question": "Will the 4-day workweek become mainstream by 2030? Make the case."},
+  {"id": 30, "category": "open_analysis", "question": "What does the high failure rate of AI 'agent startups' over the past two years actually tell us about realistic AGI timelines?"}
+]

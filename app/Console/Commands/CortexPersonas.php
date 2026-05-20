@@ -24,6 +24,7 @@ class CortexPersonas extends Command
 
         try {
             $personas = Persona::query()
+                ->where('is_ephemeral', false)
                 ->with('aiModel')
                 ->orderBy('sort_order')
                 ->get();
@@ -44,7 +45,7 @@ class CortexPersonas extends Command
             $this->output->writeln(json_encode([
                 'ok' => true,
                 'version' => config('cortex.api_version'),
-                'count' => $personas->where('is_scribe', false)->count(),
+                'count' => $personas->reject(fn (Persona $p) => $p->is_scribe || $p->is_chair)->count(),
                 'personas' => $personas->map(fn (Persona $p) => [
                     'slug' => $p->slug,
                     'name' => $p->name,
@@ -52,6 +53,7 @@ class CortexPersonas extends Command
                     'model' => $p->aiModel?->name,
                     'model_string' => $p->aiModel?->model_string,
                     'is_scribe' => (bool) $p->is_scribe,
+                    'is_chair' => (bool) $p->is_chair,
                 ])->values(),
             ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), OutputInterface::OUTPUT_RAW);
 
@@ -72,10 +74,10 @@ class CortexPersonas extends Command
         $titleW = (int) $personas->map(fn (Persona $p) => mb_strlen((string) $p->title))->max();
         $modelW = (int) $personas->map(fn (Persona $p) => mb_strlen($modelName($p)))->max();
 
-        [$scribes, $speakers] = $personas->partition->is_scribe;
+        [$special, $speakers] = $personas->partition(fn (Persona $p) => $p->is_scribe || $p->is_chair);
 
         $this->newLine();
-        $this->line('  <options=bold>CORTEX PERSONE</> — '.$speakers->count().' stručnjaka u panelu (+ scribe)');
+        $this->line('  <options=bold>CORTEX PERSONE</> — '.$speakers->count().' stručnjaka u panelu (+ scribe i chair)');
         $this->line('  Personu biraš slugom, npr.  cortex "<tema>" -Personas marco,helena,zara');
         $this->newLine();
         $this->line('  '.$pad('slug', $slugW).'  '.$pad('uloga', $titleW).'  model');
@@ -89,12 +91,13 @@ class CortexPersonas extends Command
             );
         }
 
-        foreach ($scribes as $p) {
+        foreach ($special as $p) {
             $this->newLine();
+            $note = $p->is_chair ? '(donosi završnu odluku)' : '(sažima raspravu, ne glasa)';
             $this->line(
                 '  <fg=magenta>'.$pad($p->slug, $slugW).'</>  '
                 .$pad((string) $p->title, $titleW).'  '
-                .'<fg=yellow>'.$pad($modelName($p), $modelW).'</>  <fg=default>(sažima raspravu, ne glasa)</>'
+                .'<fg=yellow>'.$pad($modelName($p), $modelW).'</>  <fg=default>'.$note.'</>'
             );
         }
 
