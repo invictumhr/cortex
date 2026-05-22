@@ -20,9 +20,14 @@ class PanelArchitect
     public function __construct(private AiProviderFactory $factory) {}
 
     /**
+     * @param  int  $count  Desired number of personas (3..8). Falls back to 5.
+     * @param  Collection<int, AiModel>|null  $forceModels  Explicit model
+     *         assignment — when given, the i-th generated persona is bound
+     *         to the i-th model in this collection via chat_personas pivot.
+     *         null = use legacy `architect_panel_models` round-robin.
      * @return Collection<int, Persona>  Ephemeral personas, or empty on failure.
      */
-    public function design(Chat $chat, string $topic): Collection
+    public function design(Chat $chat, string $topic, int $count = 5, ?Collection $forceModels = null): Collection
     {
         $architect = AiModel::query()
             ->where('model_string', config('cortex.architect_model', 'claude-sonnet-4-6'))
@@ -44,7 +49,7 @@ class PanelArchitect
 
         try {
             $response = $this->factory->for($architect)->sendMessage(
-                $this->architectPrompt($chat),
+                $this->architectPrompt($chat, $count),
                 [AiMessage::user("PITANJE:\n".$brief)],
                 ['max_tokens' => 1500, 'temperature' => 0.4],
             );
@@ -52,20 +57,21 @@ class PanelArchitect
             return collect();
         }
 
-        $roles = $this->parseRoles((string) $response->content);
+        $roles = $this->parseRoles((string) $response->content, $count);
 
-        if (count($roles) < 3) {
+        if (count($roles) < 2) {
             return collect();
         }
 
-        return $this->persistRoles($chat, $roles);
+        return $this->persistRoles($chat, $roles, $forceModels);
     }
 
-    private function architectPrompt(Chat $chat): string
+    private function architectPrompt(Chat $chat, int $count = 5): string
     {
         $language = $chat->language ?: config('cortex.output_language', 'Croatian');
+        $count = max(2, min(8, $count));
 
-        return 'Ti si arhitekt panela stručnjaka. Za zadano pitanje osmisli 5 različitih stručnih ULOGA čija bi '
+        return 'Ti si arhitekt panela stručnjaka. Za zadano pitanje osmisli točno '.$count.' različitih stručnih ULOGA čija bi '
             .'rasprava najbolje pritisnula problem iz svih relevantnih kutova. Uloge moraju biti ortogonalne (bez '
             .'preklapanja); barem jedna mora biti skeptik/realist koji presuđuje izvedivost. Za svaku ulogu vrati '
             .'"title" (kratak naziv uloge, 1-3 riječi) i "brief" (2-3 rečenice u 2. licu: tko si, koji kut pritišćeš, '
@@ -77,7 +83,7 @@ class PanelArchitect
     /**
      * @return array<int, array{title: string, brief: string}>
      */
-    private function parseRoles(string $raw): array
+    private function parseRoles(string $raw, int $count = 5): array
     {
         if (! preg_match('/\[.*\]/s', $raw, $matched)) {
             return [];
@@ -101,28 +107,40 @@ class PanelArchitect
             }
         }
 
-        return array_slice($roles, 0, 6);
+        return array_slice($roles, 0, max(2, min(8, $count)));
     }
 
     /**
+     * Persist ephemeral personas. When `$forceModels` is provided, the
+     * persona's `ai_model_id` stays null (it's a pure template) and the
+     * model is recorded later in `chat_personas.ai_model_id` by the caller.
+     * When null, fall back to legacy behaviour (assign from architect_panel_models).
+     *
      * @param  array<int, array{title: string, brief: string}>  $roles
+     * @param  Collection<int, AiModel>|null  $forceModels
      * @return Collection<int, Persona>
      */
-    private function persistRoles(Chat $chat, array $roles): Collection
+    private function persistRoles(Chat $chat, array $roles, ?Collection $forceModels = null): Collection
     {
-        $models = AiModel::query()
-            ->whereIn('model_string', (array) config('cortex.architect_panel_models', []))
-            ->whereHas('provider', fn ($q) => $q->whereNotNull('api_key'))
-            ->get()
-            ->values();
-
-        if ($models->isEmpty()) {
-            return collect();
-        }
+        // Legacy path — architect_panel_models pool, round-robin assignment
+        // baked into the persona itself. New BoardroomComposer path skips
+        // this and writes the model into the pivot instead.
+        $legacyModels = $forceModels === null
+            ? AiModel::query()
+                ->whereIn('model_string', (array) config('cortex.architect_panel_models', []))
+                ->whereHas('provider', fn ($q) => $q->whereNotNull('api_key'))
+                ->get()->values()
+            : collect();
 
         $ids = [];
 
         foreach (array_values($roles) as $i => $role) {
+            $modelId = $forceModels !== null
+                ? null                              // pivot will carry it
+                : ($legacyModels->isNotEmpty()
+                    ? $legacyModels[$i % $legacyModels->count()]->id
+                    : null);
+
             $ids[] = Persona::create([
                 'name' => $role['title'],
                 'slug' => 'eph-'.$chat->id.'-'.($i + 1),
@@ -131,7 +149,7 @@ class PanelArchitect
                 'avatar_color' => '#64748b',
                 'description' => 'Uloga generirana za raspravu #'.$chat->id.'.',
                 'system_prompt' => $role['brief'],
-                'ai_model_id' => $models[$i % $models->count()]->id,
+                'ai_model_id' => $modelId,
                 'personality_traits' => [],
                 'expertise_areas' => [],
                 'communication_style' => 'formal',

@@ -97,7 +97,11 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 
         return match ($panel->getId()) {
             'admin' => $this->isAdmin(),
-            'user' => ! $this->isAdmin() && $verified,
+            // Both admins and regular users get the customer-facing /user panel
+            // (wallet, profile, API tokens). Verified-email gate still applies
+            // — admins are seeded with email_verified_at filled in, so they
+            // sail through.
+            'user' => $verified,
             default => $verified,
         };
     }

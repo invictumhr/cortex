@@ -17,7 +17,8 @@
       "Bash(ls -la \"C:/Users/info/Desktop/SP-2026-SEO-Strategija.pdf\")",
       "mcp__Claude_in_Chrome__javascript_tool",
       "mcp__Claude_in_Chrome__read_console_messages",
-      "mcp__Claude_in_Chrome__navigate"
+      "mcp__Claude_in_Chrome__navigate",
+      "Bash(ls D:/laragon/www/)"
     ]
   }
 }

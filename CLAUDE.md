@@ -239,22 +239,47 @@ Sve drugo (prazan stream, refusal) → `release()` umjesto `commitDebit()`.
 
 ## REST API (`routes/api.php` + `app/Http/Controllers/Api/`)
 
-- **`POST /api/v1/discuss`** — pokreće boardroom za authenticated token-a:
-  body `{topic, personas?[], rounds?, title?, context?, constraints?}`, vraća
-  `{ok, chat_id, status, rounds, messages[], total_provider_cost_eur, total_user_cost_eur}`.
-  Interno forsira `queue.default=sync` + `broadcasting.default=log` — vraća
-  cijeli rezultat u response (V1 sync, async može doći u V2 s webhook callbackom).
+Eight endpoints, scope-gated. Tokens su izdani iz `/user/api-tokens` (plaintext
+prikazan jednom). Auth header: `Authorization: Bearer ctx_...`.
+
+| Method | Path                                    | Scope                  | Action |
+|--------|-----------------------------------------|------------------------|--------|
+| POST   | `/api/v1/discuss`                       | `cortex:discuss`       | Pokreće novi boardroom; tijelo `{topic, agents?\|models?\|panel?, rounds?, title?, context?, constraints?, language?}`. Vraća chat + sve poruke + cost split. |
+| GET    | `/api/v1/chats`                         | `cortex:chats.read`    | Lista chatova (newest-first). Query: `before` (ISO8601 za stranicu), `limit` (max 100), `include_archived=1`. |
+| GET    | `/api/v1/chats/{id}`                    | `cortex:chats.read`    | Pun chat + personas + poruke + scribe summaries. Query `messages_after=ID` za incremental fetch. |
+| POST   | `/api/v1/chats/{id}/messages`           | `cortex:chats.write`   | Follow-up poruka u tekuću raspravu. Sync queue; vraća samo NOVE poruke iz turna + cost split. Opcionalni `language` (ISO 639-1) updejta chat language real-time. |
+| POST   | `/api/v1/chats/{id}/archive`            | `cortex:chats.write`   | `status` → `archived`; mirror web archive. |
+| DELETE | `/api/v1/chats/{id}`                    | `cortex:chats.write`   | Hard delete s FK cascade — bespovratno. |
+| GET    | `/api/v1/wallet`                        | `cortex:wallet.read`   | `{balance, reserved, available, currency, spend_30d, margin_multiplier, tier, low_warning_threshold, min_send_balance, topup_url}`. |
+| GET    | `/api/v1/wallet/transactions`           | `cortex:wallet.read`   | Ledger pagination. Query: `type` (DEBIT/DEPOSIT/…), `before`, `limit` (max 200). |
+
+Status kodovi: `200` ok · `401` invalid/missing/revoked token · `403` `scope_required` ili `forbidden` (cross-user chat) · `402` `insufficient_funds` · `422` validation error · `429` `rate_limited` (s `retry_after_seconds`) · `500` server error.
+
 - **`AuthenticateApiToken` middleware** (`api.token` alias):
   - Extract Bearer `ctx_…` → hash → lookup `api_tokens.token_hash`
   - Reject ako `revoked_at !== null`
-  - Optional scope check (`api.token:cortex:discuss`)
+  - Optional scope check (npr. `api.token:cortex:wallet.read`)
   - Per-token rate limit: `per_day` 50, `per_hour` 10 (config `cortex.api_rate_limit`)
   - Stampa `api_token` na request attributes (controller čita za audit) i
     auth-ira ApiToken→user u request context
   - Updejta `last_used_at` na svakom uspješnom prolazu
-- **Logging:** svaka API akcija piše red u `api_token_usages` (chat_id,
+- **Scope strings** definirani kao konstante u `App\Models\ApiToken` (jedan
+  izvor istine za middleware aliase + Filament checkbox listu):
+  - `SCOPE_DISCUSS = 'cortex:discuss'`
+  - `SCOPE_CHATS_READ = 'cortex:chats.read'`
+  - `SCOPE_CHATS_WRITE = 'cortex:chats.write'`
+  - `SCOPE_WALLET_READ = 'cortex:wallet.read'`
+  - `SCOPE_KNOWLEDGE = 'cortex:knowledge'`
+  - Token bez scope-a (NULL) prolazi sve endpointe (super-user). Empty array
+    pri kreaciji se normalizira na NULL (`CreateApiToken::handleRecordCreation`).
+- **Logging** (`App\Http\Controllers\Api\Concerns\LogsApiUsage` trait): svaki
+  endpoint piše JEDAN red u `api_token_usages` (chat_id, chat_message_id,
   endpoint, provider_cost, user_cost, response_time_ms, status enum
-  `ok|rate_limited|insufficient_funds|error`)
+  `ok|rate_limited|insufficient_funds|error`). Cross-user 403, validation 422,
+  insufficient funds 402 — sve loga.
+- **Cross-user izolacija:** sve `/chats/{id}` rute provjeravaju
+  `chat->user_id === token->user_id` u controlleru i vraćaju `403 forbidden`
+  ako se ne poklapaju (route model binding ne filtrira po owneru).
 - **`ApiToken::issue(user, label, scopes)`** factory u Modelu — generira
   `ctx_` + 48 random chars, vraća `[model, plaintext]`. Plaintext se prikazuje
   jednom (u Filament create page-u kroz persistent notifikaciju)

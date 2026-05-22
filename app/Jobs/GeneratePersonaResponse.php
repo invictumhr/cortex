@@ -127,12 +127,24 @@ class GeneratePersonaResponse implements ShouldQueue
         // Round finished.
         broadcast(new RoundCompleted($chat, $this->round));
 
-        // A continuous chat has no final round — it loops until paused.
+        // A continuous chat has no final round in the bounded-CLI sense — it
+        // loops until either the user pauses, the heartbeat lapses, or we hit
+        // an auto-checkpoint (continuous chats only).
         $isFinalRound = ! $chat->continuous && $this->round >= (int) $chat->rounds_per_turn;
+
+        // Checkpoint: in continuous mode, every N rounds (config-controlled)
+        // we PAUSE the loop and force a full scribe synthesis + Chair verdict.
+        // User clicks Resume to keep going. Treated as a "soft end" — same
+        // scribe/chair pair as a real final round, but the chat reopens.
+        $checkpointEvery = (int) config('cortex.continuous_checkpoint_round_interval', 2);
+        $isCheckpoint = $chat->continuous
+            && $checkpointEvery > 0
+            && $this->round > 0
+            && $this->round % $checkpointEvery === 0;
 
         // `--fast` disables the scribe by setting an astronomically high interval.
         if ((int) $chat->scribe_interval < 1000000) {
-            if ($isFinalRound) {
+            if ($isFinalRound || $isCheckpoint) {
                 $scribe->summarize($chat, true);
                 $chair->decide($chat);
             } else {
@@ -140,12 +152,26 @@ class GeneratePersonaResponse implements ShouldQueue
             }
         }
 
+        // A checkpoint pauses the chat so the user can read the synthesis
+        // before deciding to continue. Web heartbeat keeps the page open;
+        // resume() restarts the loop from the next round.
+        if ($isCheckpoint && ! $isFinalRound) {
+            $chat->update(['status' => Chat::STATUS_PAUSED]);
+        }
+
         $chat->refresh();
 
-        if (! $isFinalRound && $chat->status === Chat::STATUS_ACTIVE) {
+        $stopping = $isFinalRound || $isCheckpoint || $chat->status !== Chat::STATUS_ACTIVE;
+
+        if (! $stopping) {
             $orchestrator->startRound($chat, $this->turn, $this->round + 1);
         } else {
-            broadcast(new TurnCompleted($chat, $isFinalRound ? 'completed' : 'paused'));
+            $reason = match (true) {
+                $isFinalRound => 'completed',
+                $isCheckpoint => 'checkpoint',
+                default       => 'paused',
+            };
+            broadcast(new TurnCompleted($chat, $reason));
         }
     }
 

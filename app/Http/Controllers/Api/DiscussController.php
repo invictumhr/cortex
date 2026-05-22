@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\InsufficientFundsException;
+use App\Http\Controllers\Api\Concerns\LogsApiUsage;
 use App\Http\Controllers\Controller;
+use App\Models\AiModel;
 use App\Models\ApiToken;
 use App\Models\ApiTokenUsage;
 use App\Models\Chat;
@@ -26,6 +28,8 @@ use Throwable;
  */
 class DiscussController extends Controller
 {
+    use LogsApiUsage;
+
     public function __invoke(
         Request $request,
         ChatOrchestrator $orchestrator,
@@ -44,28 +48,33 @@ class DiscussController extends Controller
 
         $validated = $request->validate([
             'topic' => 'required|string|min:3|max:5000',
-            'personas' => 'array',
+            // Three mutually-exclusive panel-init shapes — caller picks one.
+            // Mode 1 (quick): just say how many agents you want; system picks models.
+            'agents' => 'nullable|integer|min:2|max:8',
+            // Mode 2 (custom_models): explicit model strings; one persona per model.
+            'models' => 'nullable|array',
+            'models.*' => 'string',
+            // Mode 3 (custom): explicit (persona_slug, model_string) pairs.
+            // Same persona can repeat with a different model.
+            'panel' => 'nullable|array',
+            'panel.*.persona' => 'required_with:panel|string',
+            'panel.*.model' => 'nullable|string',
+            // Legacy — kept so old callers don't break. Maps to a custom-mode
+            // run with each persona on its default model.
+            'personas' => 'nullable|array',
             'personas.*' => 'string',
             'rounds' => 'integer|min:1|max:'.config('cortex.max_rounds', 200),
             'title' => 'nullable|string|max:255',
             'context' => 'nullable|string|max:50000',
             'constraints' => 'nullable|string|max:5000',
+            'language' => 'nullable|string|size:2',
         ]);
 
         $rounds = (int) ($validated['rounds'] ?? 2);
-        $slugs = array_filter(array_map('trim', (array) ($validated['personas'] ?? [])));
 
-        // Default panel = first 5 non-scribe/chair personas if user didn't pick;
-        // a fuller router runs in cortex:discuss but the API stays predictable.
-        $personas = $slugs !== []
-            ? Persona::whereIn('slug', $slugs)->where('is_scribe', false)->where('is_chair', false)->get()
-            : Persona::where('is_scribe', false)->where('is_chair', false)->where('is_ephemeral', false)
-                ->orderBy('sort_order')->limit(5)->get();
-
-        if ($personas->isEmpty()) {
-            return $this->logAndReturn($token, null, ApiTokenUsage::STATUS_ERROR, $started,
-                response()->json(['error' => 'no_personas_resolved'], 422));
-        }
+        // Resolve init mode from the request body — same precedence the CLI
+        // uses: panel > models > agents > personas > default quick.
+        [$initMode, $panelConfig] = $this->resolveInitMode($validated);
 
         try {
             $chat = $user->chats()->create([
@@ -73,19 +82,26 @@ class DiscussController extends Controller
                 'title' => $validated['title'] ?? 'API discussion',
                 'context' => $validated['context'] ?? null,
                 'constraints' => $validated['constraints'] ?? null,
+                'init_mode' => $initMode,
+                'panel_config' => $panelConfig,
+                'panel_composed' => $initMode === Chat::INIT_CUSTOM,
                 'rounds_per_turn' => $rounds,
                 'scribe_interval' => (int) config('cortex.default_scribe_interval', 50),
-                'language' => 'English',
+                'language' => $this->resolveLanguage($validated),
                 'status' => Chat::STATUS_ACTIVE,
             ]);
 
-            foreach ($personas as $persona) {
-                $chat->personas()->attach($persona->id, ['is_active' => true, 'joined_at' => now()]);
+            if ($initMode === Chat::INIT_CUSTOM) {
+                $this->attachCustomPanel($chat, $panelConfig);
+                if ($chat->personas()->count() === 0) {
+                    return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_ERROR, $started,
+                        response()->json(['error' => 'no_personas_resolved'], 422));
+                }
             }
 
             $orchestrator->sendUserMessage($chat, $user, $validated['topic']);
         } catch (InsufficientFundsException $e) {
-            return $this->logAndReturn($token, null, ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
+            return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
                 response()->json([
                     'error' => 'insufficient_funds',
                     'available_eur' => round($e->available, 6),
@@ -94,7 +110,7 @@ class DiscussController extends Controller
         } catch (Throwable $e) {
             report($e);
 
-            return $this->logAndReturn($token, null, ApiTokenUsage::STATUS_ERROR, $started,
+            return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_ERROR, $started,
                 response()->json(['error' => $e->getMessage()], 500));
         }
 
@@ -105,9 +121,9 @@ class DiscussController extends Controller
         $userCost = (float) $chat->messages()->sum('user_cost');
         $providerCost = (float) $chat->messages()->sum('provider_cost');
 
-        return $this->logAndReturn(
+        return $this->logUsage(
             $token,
-            $chat->id,
+            'POST /api/v1/discuss',
             ApiTokenUsage::STATUS_OK,
             $started,
             response()->json([
@@ -122,34 +138,100 @@ class DiscussController extends Controller
                 'total_provider_cost_eur' => round($providerCost, 6),
                 'total_user_cost_eur' => round($userCost, 6),
             ]),
+            chatId: $chat->id,
             providerCost: $providerCost,
             userCost: $userCost,
         );
     }
 
     /**
-     * Wrap the response in an api_token_usages log row, then return it.
+     * Map the request body to (init_mode, panel_config). Same precedence as
+     * CortexDiscuss CLI: panel > models > agents > personas (legacy) > default.
+     *
+     * @param  array<string,mixed>  $v
+     * @return array{0: string, 1: array<string,mixed>}
      */
-    private function logAndReturn(
-        ApiToken $token,
-        ?int $chatId,
-        string $status,
-        float $started,
-        JsonResponse $response,
-        float $providerCost = 0,
-        float $userCost = 0,
-    ): JsonResponse {
-        ApiTokenUsage::create([
-            'api_token_id' => $token->id,
-            'chat_id' => $chatId,
-            'endpoint' => 'POST /api/v1/discuss',
-            'provider_cost' => $providerCost,
-            'user_cost' => $userCost,
-            'response_time_ms' => (int) ((microtime(true) - $started) * 1000),
-            'status' => $status,
-            'created_at' => now(),
-        ]);
+    private function resolveInitMode(array $v): array
+    {
+        if (! empty($v['panel'])) {
+            $pairs = [];
+            foreach ($v['panel'] as $row) {
+                $slug = trim((string) ($row['persona'] ?? ''));
+                $model = trim((string) ($row['model'] ?? ''));
+                if ($slug !== '') {
+                    $pairs[] = ['persona_slug' => $slug, 'model_string' => $model !== '' ? $model : null];
+                }
+            }
 
-        return $response;
+            return [Chat::INIT_CUSTOM, ['pairs' => $pairs]];
+        }
+
+        if (! empty($v['models'])) {
+            $ids = AiModel::query()
+                ->whereIn('model_string', $v['models'])
+                ->where('is_active', true)
+                ->pluck('id')->all();
+
+            return [Chat::INIT_CUSTOM_MODELS, ['models' => array_values($ids)]];
+        }
+
+        if (! empty($v['agents'])) {
+            return [Chat::INIT_QUICK, ['agents' => max(2, min(8, (int) $v['agents']))]];
+        }
+
+        if (! empty($v['personas'])) {
+            $pairs = [];
+            foreach ($v['personas'] as $slug) {
+                $pairs[] = ['persona_slug' => $slug, 'model_string' => null];
+            }
+
+            return [Chat::INIT_CUSTOM, ['pairs' => $pairs]];
+        }
+
+        // Default for the API: quick mode with 5 agents (same as plain CLI).
+        return [Chat::INIT_QUICK, ['agents' => 5]];
     }
+
+    private function resolveLanguage(array $v): string
+    {
+        $iso = strtolower(trim((string) ($v['language'] ?? 'en')));
+        $supported = \App\Services\LanguageDetector::supportedIsoCodes();
+        $iso = in_array($iso, $supported, true) ? $iso : 'en';
+
+        return \App\Services\LanguageDetector::fromIso($iso);
+    }
+
+    /**
+     * Custom mode only — attach (persona_slug, model_string) pairs to the
+     * pivot at creation. quick / custom_models compose after first message.
+     *
+     * @param  array<string,mixed>  $panelConfig
+     */
+    private function attachCustomPanel(Chat $chat, array $panelConfig): void
+    {
+        foreach ((array) ($panelConfig['pairs'] ?? []) as $pair) {
+            $persona = Persona::query()
+                ->where('slug', $pair['persona_slug'] ?? '')
+                ->where('is_scribe', false)->where('is_chair', false)
+                ->first();
+            if (! $persona) continue;
+
+            $modelId = null;
+            if (! empty($pair['model_string'])) {
+                $model = AiModel::query()
+                    ->where('model_string', $pair['model_string'])
+                    ->where('is_active', true)
+                    ->whereHas('provider', fn ($q) => $q->whereNotNull('api_key'))
+                    ->first();
+                $modelId = $model?->id;
+            }
+
+            $chat->personas()->attach($persona->id, [
+                'ai_model_id' => $modelId,
+                'is_active' => true,
+                'joined_at' => now(),
+            ]);
+        }
+    }
+
 }

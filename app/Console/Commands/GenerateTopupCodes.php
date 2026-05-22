@@ -30,18 +30,22 @@ class GenerateTopupCodes extends Command
         $batch = $this->option('batch') ?: null;
 
         try {
-            $issued = $service->generateBatch($count, $amount, $batch);
+            $result = $service->generateBatch($count, $amount, $batch);
         } catch (\Throwable $e) {
             $this->error($e->getMessage());
 
             return self::FAILURE;
         }
 
+        $issued = $result['codes'];
+        $batchModel = $result['batch'];
+
         if ($this->option('json')) {
             $this->output->writeln(json_encode([
+                'batch_id' => $batchModel->id,
+                'batch_label' => $batchModel->label,
                 'count' => count($issued),
                 'amount_each_eur' => $amount,
-                'batch' => $batch,
                 'codes' => array_map(fn ($row) => [
                     'id' => $row['model']->id,
                     'plaintext' => $row['plaintext'],
@@ -52,7 +56,7 @@ class GenerateTopupCodes extends Command
             return self::SUCCESS;
         }
 
-        $this->info("Issued ".count($issued)." code(s), €$amount each".($batch ? " · batch \"$batch\"" : '').'.');
+        $this->info('Issued '.count($issued)." code(s), €$amount each · batch #{$batchModel->id} \"{$batchModel->label}\".");
         $this->newLine();
         $this->table(
             ['ID', 'Code (one-time view)'],
@@ -62,7 +66,7 @@ class GenerateTopupCodes extends Command
             ], $issued),
         );
         $this->newLine();
-        $this->warn('Save these now — the plaintext is not recoverable from the DB.');
+        $this->warn('Save these now — or re-export the batch CSV from /admin/topup-code-batches at any time.');
 
         return self::SUCCESS;
     }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\TopupCodeBatchExportController;
 use App\Http\Controllers\ChatActionController;
 use App\Http\Controllers\ChatAttachmentController;
 use App\Http\Controllers\ChatController;
@@ -14,6 +15,13 @@ use Illuminate\Support\Facades\Route;
 
 // Payment processor webhook — public, no auth, signed via HMAC in the handler.
 Route::post('/paddle/webhook', PaddleWebhookController::class)->name('paddle.webhook');
+
+// Admin: stream a topup-code batch as CSV (plaintext PINs, one per line).
+// The controller itself enforces is_admin on top of the auth middleware.
+Route::middleware('auth')->get(
+    '/admin/topup-batches/{batch}/codes.csv',
+    TopupCodeBatchExportController::class,
+)->name('admin.topup-batches.export');
 
 Route::get('/', function () {
     return redirect()->route(Auth::check() ? 'chats.index' : 'login');
@@ -30,6 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/chats', [ChatController::class, 'index'])->name('chats.index');
     Route::post('/chats', [ChatController::class, 'store'])->name('chats.store');
     Route::get('/chats/{chat}', [ChatController::class, 'show'])->name('chats.show');
+    Route::post('/chats/{chat}/archive', [ChatController::class, 'archive'])->name('chats.archive');
     Route::delete('/chats/{chat}', [ChatController::class, 'destroy'])->name('chats.destroy');
 
     Route::get('/chats/{chat}/messages', [ChatMessageController::class, 'index'])->name('chats.messages.index');

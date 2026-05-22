@@ -216,15 +216,32 @@ class PersonaResponder
     }
 
     /**
-     * The model a persona runs on — its assigned model by default, or its
-     * provider's flagship model when the chat was started with --strong.
+     * Pick the AI model a persona runs on for THIS chat. Resolution chain:
+     *
+     *   1. Per-chat per-persona override stored in `chat_personas.ai_model_id`
+     *      (set by BoardroomComposer or the user's custom panel picker)
+     *   2. The persona's own default `ai_model_id` (legacy 1:1 mapping)
+     *   3. Configured fallback model (`cortex.fallback_model`)
+     *
+     * `chat->strong` flagship upgrade is applied AFTER resolution so a custom
+     * pairing still respects the strong flag when present.
+     *
      * Public so CostEstimator can price a run with the same model selection.
      */
     public function modelFor(Persona $persona, Chat $chat): ?AiModel
     {
-        $base = $persona->aiModel;
+        // Step 1: per-chat override from the pivot. Looked up freshly to
+        // avoid stale relations after BoardroomComposer attaches mid-flight.
+        $base = $this->resolvePivotModel($chat, $persona)
+            ?? $persona->aiModel
+            ?? $this->fallbackPick();
 
-        if (! $chat->strong || ! $base || ! $base->provider) {
+        if (! $base) {
+            return null;
+        }
+
+        // Step 2: strong-mode flagship upgrade — same logic as before.
+        if (! $chat->strong || ! $base->provider) {
             return $base;
         }
 
@@ -241,6 +258,42 @@ class PersonaResponder
             ->first();
 
         return ($upgraded && filled($upgraded->provider?->api_key)) ? $upgraded : $base;
+    }
+
+    /** Look up `chat_personas.ai_model_id` for this (chat, persona) pair. */
+    private function resolvePivotModel(Chat $chat, Persona $persona): ?AiModel
+    {
+        $pivot = ChatPersona::query()
+            ->where('chat_id', $chat->id)
+            ->where('persona_id', $persona->id)
+            ->whereNotNull('ai_model_id')
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $pivot) {
+            return null;
+        }
+
+        return AiModel::query()
+            ->whereKey($pivot->ai_model_id)
+            ->where('is_active', true)
+            ->with('provider')
+            ->first();
+    }
+
+    /** Last-resort model when neither pivot nor persona default exists. */
+    private function fallbackPick(): ?AiModel
+    {
+        $modelString = (string) config('cortex.fallback_model', '');
+        if ($modelString === '') {
+            return null;
+        }
+
+        return AiModel::query()
+            ->where('model_string', $modelString)
+            ->where('is_active', true)
+            ->with('provider')
+            ->first();
     }
 
     /**

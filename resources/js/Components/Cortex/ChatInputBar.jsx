@@ -14,10 +14,13 @@ import { useT } from '@/i18n/I18nProvider';
  *   - if a previous send returned 402 the same CTA is highlighted as the
  *     error explanation rather than a separate alert().
  */
-export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, powershellEnabled, sendError, onClearError }) {
+export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, powershellEnabled, sendError, onClearError, initialText = '' }) {
     const { t } = useT();
     const wallet = usePage().props.wallet;
-    const [text, setText] = useState('');
+    // initialText carries the chat description into a freshly opened chat so
+    // the user can just hit Enter to start the discussion. State seeded once
+    // — after the user edits anything the value is theirs to manage.
+    const [text, setText] = useState(initialText);
     const [url, setUrl] = useState('');
     const [showUrl, setShowUrl] = useState(false);
     const [image, setImage] = useState(null);
@@ -84,7 +87,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                             href={sendError.topupUrl}
                             className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-500"
                         >
-                            Top up <ArrowRightIcon className="h-3 w-3" />
+                            {t('input.topupBtn')} <ArrowRightIcon className="h-3 w-3" />
                         </Link>
                     </div>
                 )}
@@ -109,7 +112,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                             <input
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
-                                placeholder={t('input.urlPlaceholder') || 'https://...'}
+                                placeholder={t('input.urlPlaceholder')}
                                 className="flex-1 min-w-[200px] rounded-full border-0 bg-ink-100 px-3.5 py-1 text-xs text-ink-700 ring-1 ring-ink-200/60 placeholder:text-ink-400 focus:ring-2 focus:ring-cortex-500/40 dark:bg-ink-800 dark:text-ink-200 dark:ring-ink-700/60"
                             />
                         )}
@@ -129,31 +132,27 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                         }}
                         rows={1}
                         disabled={walletEmpty}
-                        placeholder={
-                            walletEmpty
-                                ? 'Wallet empty — top up to send messages'
-                                : (t('input.placeholder') || 'Message the boardroom — Enter sends, Shift+Enter for newline')
-                        }
+                        placeholder={walletEmpty ? t('input.walletEmpty') : t('input.placeholder')}
                         className="flex-1 resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed text-ink-900 placeholder:text-ink-400 focus:ring-0 disabled:cursor-not-allowed dark:text-ink-100"
                         style={{ maxHeight: '240px' }}
                     />
 
                     <div className="flex shrink-0 items-center gap-1">
                         <IconButton
-                            title={t('input.attachImage') || 'Attach image'}
+                            title={t('input.attachImage')}
                             onClick={() => fileRef.current?.click()}
                         >
                             <PaperclipIcon className="h-4 w-4" />
                         </IconButton>
                         <IconButton
-                            title={t('input.attachUrl') || 'Attach URL'}
+                            title={t('input.attachUrl')}
                             onClick={() => setShowUrl((v) => !v)}
                             active={showUrl}
                         >
                             <LinkIcon className="h-4 w-4" />
                         </IconButton>
                         {powershellEnabled && (
-                            <IconButton title={t('input.powershell') || 'PowerShell'} onClick={onPowerShell}>
+                            <IconButton title={t('input.powershell')} onClick={onPowerShell}>
                                 <BoltIcon className="h-4 w-4" />
                             </IconButton>
                         )}
@@ -165,13 +164,13 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                                 className="flex h-8 items-center gap-1.5 rounded-full bg-rose-600 px-3 text-xs font-medium text-white shadow-soft transition-colors hover:bg-rose-500"
                             >
                                 <ArrowUpIcon className="h-3.5 w-3.5" />
-                                Top up
+                                {t('input.topupBtn')}
                             </Link>
                         ) : (
                             <button
                                 onClick={submit}
                                 disabled={!canSend}
-                                aria-label={t('input.send') || 'Send'}
+                                aria-label={t('input.send')}
                                 className="flex h-8 w-8 items-center justify-center rounded-full bg-cortex-600 text-white shadow-soft transition-all duration-150 ease-snap hover:bg-cortex-500 active:scale-95 disabled:cursor-not-allowed disabled:bg-ink-200 disabled:text-ink-400 dark:disabled:bg-ink-800 dark:disabled:text-ink-600"
                             >
                                 {sending ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <ArrowUpIcon className="h-4 w-4" />}
@@ -181,7 +180,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                 </div>
 
                 <p className="mt-2 text-center text-[11px] text-ink-400">
-                    Enter to send · Shift+Enter for a new line
+                    {t('input.enterHint')}
                 </p>
             </div>
 

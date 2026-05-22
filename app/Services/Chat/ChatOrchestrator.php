@@ -14,7 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class ChatOrchestrator
 {
-    public function __construct(private UsageGuard $guard) {}
+    public function __construct(
+        private UsageGuard $guard,
+        private BoardroomComposer $composer,
+    ) {}
 
     /**
      * Persist the user's message and kick off the first round of a new turn.
@@ -43,6 +46,15 @@ class ChatOrchestrator
 
         $chat->increment('total_messages');
         broadcast(new ChatMessageCreated($message->load('attachments')));
+
+        // First-message panel composition for quick / custom_models chats.
+        // Composer is idempotent (no-op if panel_composed=true), so safe to
+        // call unconditionally — also handles the "user picked custom mode
+        // but hasn't attached anyone yet" edge case by failing cleanly.
+        if (! $chat->panel_composed) {
+            $this->composer->composeIfNeeded($chat->fresh(), $content);
+            $chat->refresh();
+        }
 
         // A continuous discussion that is already running just absorbs the
         // message — the loop surfaces it to the personas in the next round.

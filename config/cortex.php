@@ -55,12 +55,49 @@ return [
     'benchmark_control_model' => env('CORTEX_BENCHMARK_CONTROL_MODEL', 'claude-opus-4-7'),
     'benchmark_evaluator_model' => env('CORTEX_BENCHMARK_EVALUATOR_MODEL', 'claude-sonnet-4-6'),
 
+    // Model tiers — BoardroomComposer picks from a tier based on the first
+    // message's complexity. "Small" is for quick/casual prompts, "medium"
+    // is the default, "flagship" matches what --strong / --strong tier
+    // would have used. Unknown models fall through (e.g. an admin can add a
+    // new model without touching this list; it just won't be auto-picked).
+    'model_tiers' => [
+        'small' => [
+            'gpt-4o-mini',
+            'claude-haiku-4-5-20251001',
+            'gemini-2.5-flash',
+            'deepseek-chat',
+        ],
+        'medium' => [
+            'gpt-4o',
+            'claude-sonnet-4-6',
+            'grok-3',
+            'mistral-large-latest',
+            'gemini-2.5-flash',
+            'deepseek-chat',
+        ],
+        'flagship' => [
+            'gpt-4.1',
+            'o3',
+            'claude-opus-4-7',
+            'gemini-2.5-pro',
+            'grok-3',
+            'mistral-large-latest',
+        ],
+    ],
+
     // Default number of messages between scribe summaries.
     'default_scribe_interval' => (int) env('CORTEX_DEFAULT_SCRIBE_INTERVAL', 50),
 
     // The scribe also produces an interim summary every N rounds; a guaranteed
     // cumulative final summary always runs when a discussion ends.
     'scribe_round_interval' => (int) env('CORTEX_SCRIBE_ROUND_INTERVAL', 2),
+
+    // For continuous (web) chats only: every N rounds the loop auto-pauses and
+    // forces a final scribe synthesis + Chair verdict. The user clicks Resume
+    // to continue from the next round. Set to 0 to disable (loop runs forever
+    // until user pauses). Default 2 — same cadence as scribe_round_interval
+    // so the user sees a checkpoint roughly every couple of minutes.
+    'continuous_checkpoint_round_interval' => (int) env('CORTEX_CONTINUOUS_CHECKPOINT_ROUNDS', 2),
 
     // Personas deliberate in this language (token-efficient); the scribe
     // summarises into the user-facing output language.

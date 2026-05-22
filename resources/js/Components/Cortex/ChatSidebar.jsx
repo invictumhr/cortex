@@ -1,5 +1,5 @@
-import { Link, usePage } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { Link, router, usePage } from '@inertiajs/react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import ThemeToggle from './ThemeToggle';
 import { useT } from '@/i18n/I18nProvider';
 
@@ -13,7 +13,25 @@ export default function ChatSidebar({ chats, activeId }) {
     const user = usePage().props.auth?.user;
     const [collapsed, setCollapsed] = useState(false);
 
-    const groups = useMemo(() => groupByDay(chats ?? []), [chats]);
+    // Optimistic-hide set — adding a chat id here removes its row from the
+    // sidebar the same tick the user clicks Archive or Delete. The actual
+    // request fires in the background; if it fails the id is removed and an
+    // alert surfaces. On a real DB-backed Inertia reload the chat will
+    // already be gone from `chats`, so the set just naturally empties.
+    const [hiddenIds, setHiddenIds] = useState(() => new Set());
+
+    const hide = (id) => setHiddenIds((s) => new Set(s).add(id));
+    const unhide = (id) => setHiddenIds((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+    });
+
+    const visibleChats = useMemo(
+        () => (chats ?? []).filter((c) => !hiddenIds.has(c.id)),
+        [chats, hiddenIds],
+    );
+    const groups = useMemo(() => groupByDay(visibleChats), [visibleChats]);
 
     return (
         <aside
@@ -34,7 +52,7 @@ export default function ChatSidebar({ chats, activeId }) {
                 <button
                     onClick={() => setCollapsed((v) => !v)}
                     className="rounded-lg p-1 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700 dark:hover:bg-ink-800 dark:hover:text-ink-200"
-                    title={collapsed ? 'Expand' : 'Collapse'}
+                    title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
                 >
                     <ChevronIcon className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
                 </button>
@@ -48,28 +66,35 @@ export default function ChatSidebar({ chats, activeId }) {
                     }`}
                 >
                     <PlusIcon className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>{t('sidebar.newChat') || 'New boardroom'}</span>}
+                    {!collapsed && <span>{t('sidebar.newChat')}</span>}
                 </Link>
             </div>
 
             <nav className="flex-1 overflow-y-auto px-1.5 pb-2">
-                {Object.entries(groups).map(([label, items]) => (
-                    <div key={label} className="mt-2">
+                {Object.entries(groups).map(([labelKey, items]) => (
+                    <div key={labelKey} className="mt-2">
                         {!collapsed && (
                             <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-500">
-                                {label}
+                                {t(labelKey)}
                             </div>
                         )}
                         <div className="space-y-0.5">
                             {items.map((c) => (
-                                <ChatItem key={c.id} chat={c} active={c.id === activeId} collapsed={collapsed} />
+                                <ChatItem
+                                    key={c.id}
+                                    chat={c}
+                                    active={c.id === activeId}
+                                    collapsed={collapsed}
+                                    onHide={hide}
+                                    onUnhide={unhide}
+                                />
                             ))}
                         </div>
                     </div>
                 ))}
-                {chats?.length === 0 && !collapsed && (
+                {visibleChats.length === 0 && !collapsed && (
                     <div className="mt-6 px-3 text-center text-xs text-ink-400">
-                        {t('sidebar.empty') || 'No discussions yet'}
+                        {t('sidebar.empty')}
                     </div>
                 )}
             </nav>
@@ -82,7 +107,7 @@ export default function ChatSidebar({ chats, activeId }) {
                             href="/admin"
                             className="rounded-lg px-2 py-1 text-[11px] text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700 dark:hover:bg-ink-800 dark:hover:text-ink-200"
                         >
-                            Admin
+                            {t('sidebar.admin')}
                         </a>
                     </div>
                 )}
@@ -105,22 +130,196 @@ export default function ChatSidebar({ chats, activeId }) {
     );
 }
 
-function ChatItem({ chat, active, collapsed }) {
+function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
+    const { t } = useT();
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [confirmDelete, setConfirmDelete] = useState(false);
+    const menuRef = useRef(null);
+
+    // Click-outside closes the popover. Pointerdown not click so we beat
+    // the next ChatItem's potential click — keeps menu UX feeling instant.
+    useEffect(() => {
+        if (!menuOpen) return;
+        const close = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+        };
+        document.addEventListener('pointerdown', close);
+        return () => document.removeEventListener('pointerdown', close);
+    }, [menuOpen]);
+
+    /**
+     * Optimistic remove: hide the row immediately, fire the request in the
+     * background. If the request fails, un-hide and surface the error. On
+     * the next Inertia visit the freshly fetched chat list won't include
+     * this row anyway, so the local hidden set stays small.
+     */
+    const optimisticRemove = async (httpMethod, url) => {
+        onHide?.(chat.id);
+        setMenuOpen(false);
+        try {
+            await window.axios[httpMethod](url);
+        } catch (err) {
+            onUnhide?.(chat.id);
+            // eslint-disable-next-line no-alert
+            window.alert(err.response?.data?.error || 'Action failed.');
+        }
+    };
+
+    const archive = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        optimisticRemove('post', `/chats/${chat.id}/archive`);
+    };
+
+    const askDelete = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setMenuOpen(false);
+        setConfirmDelete(true);
+    };
+
+    const doDelete = () => {
+        setConfirmDelete(false);
+        optimisticRemove('delete', `/chats/${chat.id}`);
+    };
+
     return (
-        <Link
-            href={`/chats/${chat.id}`}
-            className={`group flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm transition-colors ${
-                active
-                    ? 'bg-cortex-50 text-cortex-700 ring-1 ring-cortex-100 dark:bg-cortex-950/60 dark:text-cortex-200 dark:ring-cortex-900/60'
-                    : 'text-ink-700 hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-800/60'
-            }`}
-            title={chat.title}
-        >
-            <ChatDot active={active} status={chat.status} />
+        // `group` lives on the wrapping div, not the inner Link — the (...)
+        // button is a sibling of Link, and we want hovering ANYWHERE in the
+        // row (Link area OR over the button itself) to keep the button
+        // visible. Previous version had `group` on Link, so moving the
+        // cursor from Link onto the button broke the hover state.
+        <div className="group relative">
+            <Link
+                href={`/chats/${chat.id}`}
+                className={`flex items-center gap-2 rounded-xl px-2.5 py-2 pr-7 text-sm transition-colors ${
+                    active
+                        ? 'bg-cortex-50 text-cortex-700 ring-1 ring-cortex-100 dark:bg-cortex-950/60 dark:text-cortex-200 dark:ring-cortex-900/60'
+                        : 'text-ink-700 hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-800/60'
+                }`}
+                title={chat.title}
+            >
+                <ChatDot active={active} status={chat.status} />
+                {!collapsed && (
+                    <span className="min-w-0 flex-1 truncate">{chat.title || 'Untitled'}</span>
+                )}
+            </Link>
+
+            {/* (...) actions button — absolute-positioned so the Link spans
+                the full row but the menu trigger captures clicks separately.
+                Hidden by default, shown on row hover or while its menu is
+                open. Same gate for every row regardless of active state — the
+                actions belong to the chat, not to "the currently selected"
+                chat specifically. */}
             {!collapsed && (
-                <span className="min-w-0 flex-1 truncate">{chat.title || 'Untitled'}</span>
+                <button
+                    type="button"
+                    onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMenuOpen((v) => !v);
+                    }}
+                    title={t('chat.actions.open')}
+                    className={`absolute right-1 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-ink-400 transition-opacity hover:bg-ink-200 hover:text-ink-700 dark:hover:bg-ink-700 dark:hover:text-ink-200 ${
+                        menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+                    }`}
+                >
+                    <DotsIcon className="h-3.5 w-3.5" />
+                </button>
             )}
-        </Link>
+
+            {menuOpen && (
+                <div
+                    ref={menuRef}
+                    className="absolute right-1 top-9 z-30 min-w-[140px] rounded-xl bg-white p-1 shadow-pop ring-1 ring-ink-200/60 dark:bg-ink-800 dark:ring-ink-700/60"
+                >
+                    <button
+                        type="button"
+                        onClick={archive}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-ink-700 hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-700"
+                    >
+                        <ArchiveIcon className="h-3.5 w-3.5" />
+                        {t('chat.actions.archive')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={askDelete}
+                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-xs text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/30"
+                    >
+                        <TrashIcon className="h-3.5 w-3.5" />
+                        {t('chat.actions.delete')}
+                    </button>
+                </div>
+            )}
+
+            {confirmDelete && (
+                <DeleteConfirmModal
+                    title={chat.title}
+                    onConfirm={doDelete}
+                    onCancel={() => setConfirmDelete(false)}
+                />
+            )}
+        </div>
+    );
+}
+
+/** Modal that asks the user to commit to an irreversible delete. */
+function DeleteConfirmModal({ title, onConfirm, onCancel }) {
+    const { t } = useT();
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/50 p-4">
+            <div className="surface w-full max-w-sm p-5 animate-fade-up">
+                <div className="mb-2 flex items-center gap-2">
+                    <TrashIcon className="h-5 w-5 text-rose-500" />
+                    <h3 className="text-sm font-semibold text-ink-900 dark:text-ink-50">
+                        {t('chat.actions.deleteConfirmTitle')}
+                    </h3>
+                </div>
+                <p className="text-sm text-ink-600 dark:text-ink-300">
+                    {t('chat.actions.deleteConfirmBody')}
+                </p>
+                <p className="mt-2 truncate rounded-lg bg-ink-100 px-2.5 py-1.5 text-xs text-ink-700 dark:bg-ink-800 dark:text-ink-200">
+                    {title || 'Untitled'}
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                    <button type="button" onClick={onCancel} className="btn-soft">
+                        {t('chat.actions.deleteConfirmNo')}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onConfirm}
+                        className="btn-primary !bg-rose-600 hover:!bg-rose-500"
+                    >
+                        {t('chat.actions.deleteConfirmYes')}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DotsIcon({ className }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="5"  cy="12" r="1.6" />
+            <circle cx="12" cy="12" r="1.6" />
+            <circle cx="19" cy="12" r="1.6" />
+        </svg>
+    );
+}
+function ArchiveIcon({ className }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="4" width="18" height="4" rx="1" />
+            <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" />
+        </svg>
+    );
+}
+function TrashIcon({ className }) {
+    return (
+        <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+        </svg>
     );
 }
 
@@ -178,14 +377,16 @@ function groupByDay(chats) {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    const out = { Today: [], Yesterday: [], Earlier: [] };
+    // Keys are i18n keys, not visible text — render-side calls t(labelKey) so
+    // a HR/EN toggle flips group headings without rebuilding the structure.
+    const out = { 'sidebar.today': [], 'sidebar.yesterday': [], 'sidebar.earlier': [] };
     for (const chat of chats) {
         const d = chat.updated_at ? new Date(chat.updated_at) : new Date(chat.created_at || Date.now());
         const day = new Date(d);
         day.setHours(0, 0, 0, 0);
-        if (day.getTime() === today.getTime()) out.Today.push(chat);
-        else if (day.getTime() === yesterday.getTime()) out.Yesterday.push(chat);
-        else out.Earlier.push(chat);
+        if (day.getTime() === today.getTime()) out['sidebar.today'].push(chat);
+        else if (day.getTime() === yesterday.getTime()) out['sidebar.yesterday'].push(chat);
+        else out['sidebar.earlier'].push(chat);
     }
     // Drop empty buckets so headings don't dangle.
     return Object.fromEntries(Object.entries(out).filter(([, v]) => v.length > 0));

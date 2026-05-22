@@ -92,12 +92,17 @@ export default function Show({
     const sendMessage = async ({ content, url, image }) => {
         setSending(true);
         setSendError(null);
+
+        // Flip the UI to "active" the same tick the user clicks send. Without
+        // this the chat header still says "Paused" while the request is in
+        // flight (BoardroomComposer can take a few seconds on first message),
+        // which reads as "broken". The server confirms the same active state
+        // a moment later — no flicker, just no false-paused window.
+        setChat((c) => ({ ...c, status: 'active' }));
+
         const form = new FormData();
         form.append('content', content);
         // The AI panel writes in whatever language the UI is set to right now.
-        // Sending this with every message lets a user mid-chat language switch
-        // take effect from the next persona turn onward without breaking the
-        // already-rendered transcript.
         if (lang) form.append('language', lang);
         if (url) form.append('url', url);
         if (image) form.append('image', image);
@@ -161,7 +166,13 @@ export default function Show({
                                 <StatusBadge status={chat.status} />
                             </div>
                             <div className="mt-0.5 flex items-center gap-3 text-[11px] text-ink-400">
-                                <span>Round {chat.current_round ?? 0}{chat.rounds_per_turn ? ` / ${chat.rounds_per_turn}` : ''}</span>
+                                <span>
+                                    Round {chat.current_round ?? 0}
+                                    {/* Continuous web chats have no fixed end — drop the "/ N"
+                                        because there isn't a meaningful denominator. Bounded
+                                        CLI chats keep showing "/ rounds_per_turn". */}
+                                    {!chat.continuous && chat.rounds_per_turn ? ` / ${chat.rounds_per_turn}` : ''}
+                                </span>
                                 <span>·</span>
                                 <span className="tabular-nums">€{Number(chat.total_cost ?? 0).toFixed(5)}</span>
                                 <span>·</span>
@@ -177,12 +188,15 @@ export default function Show({
                                     {running ? (
                                         <>
                                             <PauseIcon className="h-4 w-4" />
-                                            <span>Pause</span>
+                                            {/* show.pause/resume i18n strings include a glyph
+                                                prefix (⏸/▶) — strip it here because the icon
+                                                next to the label is the visual cue. */}
+                                            <span>{t('show.pause').replace(/^[⏸▶]\s*/, '')}</span>
                                         </>
                                     ) : (
                                         <>
                                             <PlayIcon className="h-4 w-4" />
-                                            <span>Resume</span>
+                                            <span>{t('show.resume').replace(/^[⏸▶]\s*/, '')}</span>
                                         </>
                                     )}
                                 </button>
@@ -190,10 +204,10 @@ export default function Show({
                             <button
                                 onClick={() => setDrawerOpen((v) => !v)}
                                 className="btn-ghost"
-                                title="Personas"
+                                title={t('show.headerPersonas')}
                             >
                                 <UsersIcon className="h-4 w-4" />
-                                <span className="hidden sm:inline">Personas</span>
+                                <span className="hidden sm:inline">{t('show.headerPersonas')}</span>
                             </button>
                         </div>
                     </header>
@@ -211,16 +225,28 @@ export default function Show({
                                 <div className="flex h-[60vh] flex-col items-center justify-center text-center">
                                     <SparkleIcon className="mb-4 h-8 w-8 text-cortex-500" />
                                     <h2 className="text-lg font-medium text-ink-700 dark:text-ink-200">
-                                        Ready when you are
+                                        {t('show.heroTitle')}
                                     </h2>
                                     <p className="mt-1 max-w-sm text-sm text-ink-400">
-                                        Type a topic below. The boardroom will pick it up and respond persona-by-persona.
+                                        {t('show.heroBody')}
                                     </p>
                                 </div>
                             )}
                             {messages.map((m) => (
                                 <MessageBubble key={m.id} message={m} animate={animateIds.current.has(m.id)} />
                             ))}
+
+                            {/* Bootstrap indicator: after the user posts the
+                                first message but before any persona has spoken
+                                yet. Covers the BoardroomComposer call (architect
+                                + model picker, can take a few seconds) and the
+                                queue-dispatch delay before the first persona
+                                job picks up the work. Hidden once any persona
+                                message arrives (typing indicator takes over). */}
+                            {running && !typing && messages.some(m => m.role === 'user') && !messages.some(m => m.role === 'persona' || m.role === 'scribe') && (
+                                <PreparingIndicator t={t} />
+                            )}
+
                             {typing && (
                                 <div className="flex items-center gap-3 pl-12 text-xs text-ink-500 dark:text-ink-400">
                                     <span className="flex gap-1">
@@ -228,20 +254,22 @@ export default function Show({
                                         <span className="h-1.5 w-1.5 animate-soft-pulse rounded-full bg-cortex-500" style={{ animationDelay: '200ms' }} />
                                         <span className="h-1.5 w-1.5 animate-soft-pulse rounded-full bg-cortex-500" style={{ animationDelay: '400ms' }} />
                                     </span>
-                                    <span>
-                                        <span className="font-medium text-ink-700 dark:text-ink-200">{typing.name}</span> is thinking · round {typing.round}
-                                    </span>
+                                    <ThinkingLine t={t} name={typing.name} round={typing.round} />
                                 </div>
                             )}
                             {started && !running && !typing && (
-                                <div className="pl-12 text-xs italic text-ink-400">
-                                    Discussion paused. Click <strong>Resume</strong> to continue.
-                                </div>
+                                <PausedHint t={t} />
                             )}
                         </div>
                     </div>
 
-                    {/* Composer */}
+                    {/* Composer
+                        On the very first visit to a freshly created chat we
+                        seed the textarea with the description the user typed
+                        on the welcome screen. They can hit Enter immediately
+                        or edit first. Once anyone has spoken in the chat we
+                        stop pre-filling — picking up a paused thread should
+                        start with an empty composer. */}
                     <ChatInputBar
                         sending={sending}
                         powershellEnabled={powershellEnabled}
@@ -249,6 +277,11 @@ export default function Show({
                         onPowerShell={() => setShowPs(true)}
                         sendError={sendError}
                         onClearError={() => setSendError(null)}
+                        initialText={
+                            initialMessages.length === 0 && initialChat.description
+                                ? String(initialChat.description)
+                                : ''
+                        }
                     />
                 </main>
 
@@ -256,7 +289,7 @@ export default function Show({
                 {drawerOpen && (
                     <div className="fixed inset-y-0 right-0 z-30 w-80 border-l border-ink-200/60 bg-white shadow-pop dark:border-ink-800/60 dark:bg-ink-900">
                         <div className="flex items-center justify-between border-b border-ink-200/60 px-4 py-3 dark:border-ink-800/60">
-                            <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-50">Boardroom</h2>
+                            <h2 className="text-sm font-semibold text-ink-900 dark:text-ink-50">{t('show.drawerTitle')}</h2>
                             <button
                                 onClick={() => setDrawerOpen(false)}
                                 className="rounded-lg p-1 text-ink-400 hover:bg-ink-100 hover:text-ink-700 dark:hover:bg-ink-800 dark:hover:text-ink-200"
@@ -282,11 +315,12 @@ export default function Show({
 }
 
 function StatusBadge({ status }) {
+    const { t } = useT();
     if (status === 'active') {
         return (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200/60 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900/60">
                 <span className="h-1.5 w-1.5 animate-soft-pulse rounded-full bg-emerald-500" />
-                Active
+                {t('show.statusActive')}
             </span>
         );
     }
@@ -294,11 +328,61 @@ function StatusBadge({ status }) {
         return (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/60">
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                Paused
+                {t('show.statusPaused')}
             </span>
         );
     }
     return null;
+}
+
+/**
+ * First-message bootstrap state — shown between the user's opening message
+ * and the very first persona response. Visually distinct from the regular
+ * "{persona} is thinking…" so the user knows the model panel itself is
+ * still being assembled (architect + model picker, then queue handoff).
+ */
+function PreparingIndicator({ t }) {
+    return (
+        <div className="surface-muted flex items-start gap-3 px-4 py-3 animate-fade-up">
+            <span className="mt-1.5 flex shrink-0 gap-1">
+                <span className="h-1.5 w-1.5 animate-soft-pulse rounded-full bg-cortex-500" style={{ animationDelay: '0ms' }} />
+                <span className="h-1.5 w-1.5 animate-soft-pulse rounded-full bg-cortex-500" style={{ animationDelay: '200ms' }} />
+                <span className="h-1.5 w-1.5 animate-soft-pulse rounded-full bg-cortex-500" style={{ animationDelay: '400ms' }} />
+            </span>
+            <div className="min-w-0 text-sm text-ink-600 dark:text-ink-300">
+                {t('show.preparing')}
+            </div>
+        </div>
+    );
+}
+
+/**
+ * "Marko is thinking · round 3" — i18n string has a `{name}` placeholder
+ * that we want to render in semibold. We split around the placeholder so
+ * we don't need dangerouslySetInnerHTML.
+ */
+function ThinkingLine({ t, name, round }) {
+    const raw = t('show.thinking', { round, name: ' NAME ' });
+    const [before, after] = raw.split(' NAME ');
+    return (
+        <span>
+            {before}
+            <span className="font-medium text-ink-700 dark:text-ink-200">{name}</span>
+            {after}
+        </span>
+    );
+}
+
+/** Italic note that the chat is paused — "Resume" word is bolded. */
+function PausedHint({ t }) {
+    const resumeLabel = t('show.resume').replace(/^[⏸▶]\s*/, '');
+    const raw = t('show.pausedShort', { resume: ' RESUME ' });
+    const [before, after] = raw.split(' RESUME ');
+    return (
+        <div className="pl-12 text-xs italic text-ink-400">
+            {before}<strong>{resumeLabel}</strong>{after}
+        </div>
+    );
 }
 
 function PauseIcon({ className }) { return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>; }

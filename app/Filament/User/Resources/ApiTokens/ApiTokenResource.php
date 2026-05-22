@@ -50,11 +50,10 @@ class ApiTokenResource extends Resource
                 ->maxLength(100)
                 ->helperText('A name only you see — e.g. "n8n workflow" or "VS Code"'),
             CheckboxList::make('scopes')
-                ->options([
-                    'cortex:discuss' => 'Start boardroom discussions',
-                    'cortex:read' => 'Read existing chats',
-                    'cortex:knowledge' => 'Query the global knowledge base',
-                ])
+                // Pulled from ApiToken::availableScopes() so the model stays
+                // the single source of truth for what scopes exist.
+                ->options(ApiToken::availableScopes())
+                ->columns(1)
                 ->helperText('Leave empty to grant all current and future scopes.'),
         ]);
     }

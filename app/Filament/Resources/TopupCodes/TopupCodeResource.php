@@ -4,23 +4,23 @@ namespace App\Filament\Resources\TopupCodes;
 
 use App\Filament\Resources\TopupCodes\Pages\ListTopupCodes;
 use App\Models\TopupCode;
-use App\Services\Billing\TopupCodeService;
+use App\Models\TopupCodeBatch;
 use BackedEnum;
-use Filament\Actions\Action;
-use Filament\Forms\Components\TextInput;
-use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 
 /**
- * Admin TopupCode management. Provides:
- *  - the global list of issued codes (status, batch, redeemed-by, value)
- *  - the "Generate batch" header action, which surfaces the plaintext PINs
- *    in a persistent notification — the ONLY time admin sees them.
+ * Admin per-code list. Read-only: the actual minting flow lives in the sibling
+ * "Code generation jobs" resource (TopupCodeBatchResource). This page exists so
+ * admin can audit individual codes (who redeemed, when, what amount, which
+ * batch they belong to).
+ *
+ * The batch_id filter is the deep-link target from the batch resource's
+ * "View codes" row action, so visiting this page already filtered to one batch
+ * is the common navigation path.
  */
 class TopupCodeResource extends Resource
 {
@@ -37,11 +37,13 @@ class TopupCodeResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('id')->sortable()->toggleable(),
-                TextColumn::make('batch_label')
+                TextColumn::make('batch.label')
+                    ->label('Batch')
                     ->placeholder('—')
                     ->badge()
                     ->color('gray')
-                    ->searchable(),
+                    ->searchable()
+                    ->description(fn (TopupCode $r) => $r->batch_id ? '#'.$r->batch_id : null),
                 TextColumn::make('amount')->money('EUR')->sortable(),
                 TextColumn::make('status')
                     ->state(fn (TopupCode $r) => $r->isRedeemed() ? 'redeemed' : 'open')
@@ -68,62 +70,13 @@ class TopupCodeResource extends Resource
                         'redeemed' => $query->whereNotNull('redeemed_at'),
                         default => $query,
                     }),
-                SelectFilter::make('batch_label')
-                    ->options(fn () => TopupCode::query()
-                        ->whereNotNull('batch_label')
-                        ->distinct()
-                        ->pluck('batch_label', 'batch_label')
-                        ->all()),
-            ])
-            ->headerActions([
-                Action::make('generate_batch')
-                    ->label('Generate batch')
-                    ->icon(Heroicon::OutlinedSparkles)
-                    ->color('primary')
-                    ->modalDescription('Generate N new codes worth the same amount. Plaintext is shown ONCE — copy or paste it to SMS / spreadsheet immediately.')
-                    ->schema([
-                        TextInput::make('count')
-                            ->numeric()
-                            ->required()
-                            ->minValue(1)
-                            ->maxValue(1000)
-                            ->default(10)
-                            ->helperText('How many codes to mint'),
-                        TextInput::make('amount')
-                            ->numeric()
-                            ->required()
-                            ->minValue(0.01)
-                            ->step(0.01)
-                            ->default(5)
-                            ->prefix('€')
-                            ->helperText('EUR value of each code'),
-                        TextInput::make('batch_label')
-                            ->maxLength(64)
-                            ->placeholder('SMS Q2 2026')
-                            ->helperText('Optional grouping label'),
-                    ])
-                    ->action(function (array $data) {
-                        $service = app(TopupCodeService::class);
-                        $issued = $service->generateBatch(
-                            count: (int) $data['count'],
-                            eachAmount: (float) $data['amount'],
-                            batchLabel: $data['batch_label'] ?: null,
-                            createdBy: auth()->user(),
-                        );
-
-                        // Persistent notification carries the PIN list — admin
-                        // copies them out before clicking away.
-                        $lines = array_map(
-                            fn ($row) => '#'.$row['model']->id.'  '.TopupCodeService::formatForDisplay($row['plaintext']),
-                            $issued,
-                        );
-                        Notification::make()
-                            ->title(count($issued).' codes generated — copy now')
-                            ->body("These plaintext PINs are shown ONCE:\n\n```\n".implode("\n", $lines)."\n```")
-                            ->success()
-                            ->persistent()
-                            ->send();
-                    }),
+                SelectFilter::make('batch_id')
+                    ->label('Batch')
+                    ->options(fn () => TopupCodeBatch::query()
+                        ->orderByDesc('id')
+                        ->pluck('label', 'id')
+                        ->all())
+                    ->searchable(),
             ]);
     }
 
@@ -134,7 +87,7 @@ class TopupCodeResource extends Resource
         ];
     }
 
-    /** Codes are only created via the batch action; no per-record create. */
+    /** Codes are only created via the batch resource; no per-record create. */
     public static function canCreate(): bool
     {
         return false;

@@ -1,4 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
+import { useT } from '@/i18n/I18nProvider';
 
 /**
  * Above-the-fold balance reminder. Three states:
@@ -10,6 +11,7 @@ import { Link, usePage } from '@inertiajs/react';
  * we drop this component it stays in sync with backend config.
  */
 export default function BalanceBanner({ compact = false }) {
+    const { t } = useT();
     const wallet = usePage().props.wallet;
     if (!wallet) return null;
 
@@ -36,12 +38,10 @@ export default function BalanceBanner({ compact = false }) {
             btn: 'bg-amber-600 text-white hover:bg-amber-500',
         };
 
-    const title = empty
-        ? 'Your wallet is empty'
-        : 'Running low on credits';
-    const body = empty
-        ? 'Redeem a top-up PIN to send messages and run the boardroom.'
-        : `You have ${currency} ${available.toFixed(2)} left. Top up before the next discussion runs out.`;
+    const title = empty ? t('balance.emptyTitle') : t('balance.lowTitle');
+    const body  = empty
+        ? t('balance.emptyBody')
+        : t('balance.lowBody', { currency, amount: available.toFixed(2) });
 
     if (compact) {
         return (
@@ -51,7 +51,7 @@ export default function BalanceBanner({ compact = false }) {
             >
                 <DotIcon className={`h-1.5 w-1.5 ${palette.icon} fill-current`} />
                 <span>
-                    {empty ? 'Top up to continue' : `Low: €${available.toFixed(2)}`}
+                    {empty ? t('balance.compactEmpty') : t('balance.compactLow', { amount: available.toFixed(2) })}
                 </span>
                 <ArrowRightIcon className="h-3 w-3" />
             </Link>
@@ -73,7 +73,7 @@ export default function BalanceBanner({ compact = false }) {
                 href={topup_url}
                 className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl ${palette.btn} px-3.5 py-2 text-xs font-medium shadow-soft transition-colors`}
             >
-                Top up
+                {t('balance.topup')}
                 <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
         </div>

@@ -32,7 +32,10 @@ class CortexDiscuss extends Command
     protected $signature = 'cortex:discuss
         {message? : Tema ili poruka boardroomu (izostavi za pomoć)}
         {--chat= : Nastavi postojeći chat po ID-u}
-        {--personas= : Slugovi persona odvojeni zarezom (za novi chat)}
+        {--agents= : Brzi mod — koliko AI agenata u panelu (2-8). Sustav bira modele.}
+        {--models= : Custom-modeli mod — model_string-ovi odvojeni zarezom (npr. gpt-4o,claude-opus-4-7,grok-3). Broj persona = broj modela.}
+        {--pairs= : Custom mod — parovi persona:model odvojeni zarezom (npr. marco:gpt-4o,luna:claude-sonnet-4-6). Ista persona se može pojaviti više puta s različitim modelima.}
+        {--personas= : (legacy) Slugovi persona, koriste persona-default modele.}
         {--rounds=2 : Krugova po unosu}
         {--title= : Naslov chata (za novi chat)}
         {--scribe=50 : Interval scribe sažetka}
@@ -40,8 +43,8 @@ class CortexDiscuss extends Command
         {--memory : Ubaci akumulirano znanje (knowledge digest) u kontekst}
         {--context= : Putanja do datoteke s kontekstom (data model, postojeće stanje)}
         {--constraints= : Tvrda ograničenja koja sve persone moraju poštovati}
-        {--architect : Model dizajnira panel uloga skrojen za pitanje (umjesto fiksnih persona)}
-        {--strong : Panel trči na flagship modelima (Opus 4.7, o3, Grok 3, Gemini Pro...)}
+        {--architect : (legacy alias za --agents=5)}
+        {--strong : Panel trči na flagship modelima (Opus 4.7, o3, Grok 3, Gemini Pro...). Za quick mod prisiljava flagship tier.}
         {--language=en : Jezik rasprave (ISO 639-1, default en; podržano: en, hr, sr, bs, sl, sk, cs, pl, bg, ru, uk, de, fr, it, es, pt, nl, ro, hu, sv, el, da, fi)}
         {--json : Strojno-čitljiv JSON izlaz za druge agente}';
 
@@ -114,7 +117,18 @@ class CortexDiscuss extends Command
         }
 
         $speakers = $chat->activePersonas()->where('is_scribe', false)->orderBy('sort_order')->get();
-        if ($speakers->isEmpty()) {
+
+        // For quick / custom_models the panel is composed by BoardroomComposer
+        // *after* the first message lands — so an empty roster here is OK,
+        // we just print a placeholder. Only fail when in custom mode with no
+        // attached panel (which means the user really did mis-configure it).
+        $deferredComposition = ! $chat->panel_composed && in_array(
+            $chat->init_mode,
+            [Chat::INIT_QUICK, Chat::INIT_CUSTOM_MODELS],
+            true,
+        );
+
+        if ($speakers->isEmpty() && ! $deferredComposition) {
             return $this->bail('Chat nema aktivnih persona — provjeri API ključeve.', $json);
         }
 
@@ -124,7 +138,15 @@ class CortexDiscuss extends Command
 
         if (! $json) {
             $this->info("=== Chat #{$chat->id}: {$chat->title} ===");
-            $this->line('Persone: '.$speakers->pluck('name')->implode(', ')." | Krugova: {$chat->rounds_per_turn}");
+            if ($deferredComposition) {
+                $cfg = (array) ($chat->panel_config ?? []);
+                $label = $chat->init_mode === Chat::INIT_QUICK
+                    ? ('quick · '.($cfg['agents'] ?? '?').' agentsa')
+                    : ('custom models · '.count((array) ($cfg['models'] ?? [])).' modela');
+                $this->line('Persone: ('.$label.', kompozicija nakon prve poruke) | Krugova: '.$chat->rounds_per_turn);
+            } else {
+                $this->line('Persone: '.$speakers->pluck('name')->implode(', ')." | Krugova: {$chat->rounds_per_turn}");
+            }
             $this->newLine();
             $this->line('<options=bold;fg=blue>TI:</> '.$topic);
             $this->newLine();
@@ -394,47 +416,147 @@ class CortexDiscuss extends Command
     {
         $fast = (bool) $this->option('fast');
 
+        // Resolve init_mode from CLI flags. Precedence: --pairs > --models >
+        // --agents > legacy --personas > legacy --architect > default.
+        [$initMode, $panelConfig] = $this->resolveInitMode();
+
         $chat = $user->chats()->create([
             'title' => $this->option('title') ?: 'CLI rasprava',
             'context' => $context !== '' ? $context : null,
             'constraints' => $constraints !== '' ? $constraints : null,
             'strong' => (bool) $this->option('strong'),
+            'init_mode' => $initMode,
+            'panel_config' => $panelConfig,
+            'panel_composed' => $initMode === Chat::INIT_CUSTOM,
             'rounds_per_turn' => $fast ? 1 : max(1, min(200, (int) $this->option('rounds'))),
             'scribe_interval' => $fast ? 1000000 : max(1, (int) $this->option('scribe')),
             'language' => LanguageDetector::fromIso((string) $this->option('language')),
             'status' => Chat::STATUS_ACTIVE,
         ]);
 
-        $slugs = array_filter(array_map('trim', explode(',', (string) $this->option('personas'))));
-
-        if ($slugs !== []) {
-            $personas = Persona::whereIn('slug', $slugs)
-                ->where('is_scribe', false)->where('is_chair', false)->where('is_ephemeral', false)
-                ->with('aiModel.provider')->orderBy('sort_order')->get();
-        } elseif ($this->option('architect')) {
-            $personas = app(PanelArchitect::class)->design($chat, $topic);
-            if ($personas->isEmpty()) {
-                $personas = $this->defaultPersonas($topic); // architect zakazao -> router fallback
-            }
-        } else {
-            $personas = $this->defaultPersonas($topic);
-        }
-
-        $usable = $personas->filter(
-            fn (Persona $p) => $p->aiModel && $p->aiModel->provider && filled($p->aiModel->provider->api_key)
-        );
-
-        if (! $json) {
-            foreach ($personas->diff($usable) as $skipped) {
-                $this->warn("Preskačem '{$skipped->name}' — provider nema API ključ.");
-            }
-        }
-
-        foreach ($usable as $persona) {
-            $chat->personas()->attach($persona->id, ['is_active' => true, 'joined_at' => now()]);
+        // For quick / custom_models, BoardroomComposer attaches personas after
+        // the first user message lands — no preflight personas needed here.
+        // For custom, attach pairs now.
+        if ($initMode === Chat::INIT_CUSTOM) {
+            $this->attachCustomPanel($chat, $panelConfig, $json);
         }
 
         return $chat;
+    }
+
+    /**
+     * @return array{0: string, 1: array<string, mixed>}  [init_mode, panel_config]
+     */
+    private function resolveInitMode(): array
+    {
+        $pairs = trim((string) $this->option('pairs'));
+        if ($pairs !== '') {
+            // pairs="marco:gpt-4o,luna:claude-sonnet-4-6,marco:claude-opus-4-7"
+            $items = [];
+            foreach (array_filter(array_map('trim', explode(',', $pairs))) as $token) {
+                [$slug, $modelString] = array_pad(explode(':', $token, 2), 2, null);
+                if ($slug && $modelString) {
+                    $items[] = ['persona_slug' => trim($slug), 'model_string' => trim($modelString)];
+                }
+            }
+
+            return [Chat::INIT_CUSTOM, ['pairs' => $items]];
+        }
+
+        $models = array_filter(array_map('trim', explode(',', (string) $this->option('models'))));
+        if ($models !== []) {
+            $ids = AiModel::query()
+                ->whereIn('model_string', $models)
+                ->where('is_active', true)
+                ->pluck('id')->all();
+
+            return [Chat::INIT_CUSTOM_MODELS, ['models' => array_values($ids)]];
+        }
+
+        $agents = (int) $this->option('agents');
+        if ($agents > 0) {
+            return [Chat::INIT_QUICK, ['agents' => max(2, min(8, $agents))]];
+        }
+
+        // Legacy paths kept for backward compat — they map to custom mode
+        // with the persona's default model bound at attach time.
+        $slugs = array_filter(array_map('trim', explode(',', (string) $this->option('personas'))));
+        if ($slugs !== []) {
+            return [Chat::INIT_CUSTOM, ['legacy_persona_slugs' => $slugs]];
+        }
+
+        if ($this->option('architect')) {
+            return [Chat::INIT_QUICK, ['agents' => 5]];
+        }
+
+        // Plain `cortex "..."` with no flags → quick start, 5 agents, system picks models.
+        return [Chat::INIT_QUICK, ['agents' => 5]];
+    }
+
+    /**
+     * Custom mode: attach (persona, model) pairs now. Handles both the new
+     * `pairs` shape and the legacy `legacy_persona_slugs` shape (which
+     * binds to each persona's default model).
+     */
+    private function attachCustomPanel(Chat $chat, array $panelConfig, bool $json): void
+    {
+        $pairs = (array) ($panelConfig['pairs'] ?? []);
+
+        // Translate legacy slug list → pairs with persona-default models.
+        if ($pairs === [] && ! empty($panelConfig['legacy_persona_slugs'])) {
+            foreach ((array) $panelConfig['legacy_persona_slugs'] as $slug) {
+                $pairs[] = ['persona_slug' => $slug, 'model_string' => null];
+            }
+        }
+
+        if ($pairs === []) {
+            // Custom mode with no panel — degrade to default persona pick.
+            foreach ($this->defaultPersonas('')->take(5) as $persona) {
+                $chat->personas()->attach($persona->id, [
+                    'is_active' => true,
+                    'joined_at' => now(),
+                ]);
+            }
+
+            return;
+        }
+
+        foreach ($pairs as $pair) {
+            $persona = Persona::query()
+                ->where('slug', $pair['persona_slug'] ?? '')
+                ->where('is_scribe', false)
+                ->where('is_chair', false)
+                ->first();
+
+            if (! $persona) {
+                if (! $json) {
+                    $this->warn("Preskačem '{$pair['persona_slug']}' — persona ne postoji.");
+                }
+                continue;
+            }
+
+            $modelId = null;
+            if (! empty($pair['model_string'])) {
+                $model = AiModel::query()
+                    ->where('model_string', $pair['model_string'])
+                    ->where('is_active', true)
+                    ->whereHas('provider', fn ($q) => $q->whereNotNull('api_key'))
+                    ->first();
+                if (! $model) {
+                    if (! $json) {
+                        $this->warn("Preskačem '{$pair['persona_slug']}' — model '{$pair['model_string']}' nije dostupan.");
+                    }
+                    continue;
+                }
+                $modelId = $model->id;
+            }
+
+            $chat->personas()->attach($persona->id, [
+                'ai_model_id' => $modelId,
+                'is_active' => true,
+                'joined_at' => now(),
+            ]);
+        }
     }
 
     /**

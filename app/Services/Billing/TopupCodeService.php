@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Models\TopupCode;
+use App\Models\TopupCodeBatch;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,11 +26,14 @@ class TopupCodeService
     public function __construct(private WalletService $walletService) {}
 
     /**
-     * Generate a batch of N codes, all worth the same amount. Returns the
-     * plaintext PINs alongside their saved models so the caller can hand
-     * them out (SMS, print, email — whatever).
+     * Generate a batch of N codes, all worth the same amount. Creates a
+     * TopupCodeBatch parent row (the "code generation job") and links every
+     * code to it via batch_id. Returns the plaintext PINs alongside their
+     * saved models so the caller can hand them out immediately (SMS, print,
+     * email). Plaintext is also stored encrypted on each code row so admin
+     * can re-export the batch as CSV later.
      *
-     * @return array<int, array{model: TopupCode, plaintext: string}>
+     * @return array{batch: TopupCodeBatch, codes: array<int, array{model: TopupCode, plaintext: string}>}
      */
     public function generateBatch(
         int $count,
@@ -37,6 +41,7 @@ class TopupCodeService
         ?string $batchLabel = null,
         ?User $createdBy = null,
         array $metadata = [],
+        ?string $notes = null,
     ): array {
         if ($count < 1 || $count > 10000) {
             throw new \InvalidArgumentException('Batch size must be 1..10000.');
@@ -46,7 +51,18 @@ class TopupCodeService
         }
 
         $issued = [];
-        DB::transaction(function () use ($count, $eachAmount, $batchLabel, $createdBy, $metadata, &$issued) {
+        $batch = null;
+        DB::transaction(function () use ($count, $eachAmount, $batchLabel, $createdBy, $metadata, $notes, &$issued, &$batch) {
+            $batch = TopupCodeBatch::create([
+                // Default label keeps the row identifiable even if admin
+                // submits an empty label (CLI path used to allow null).
+                'label' => $batchLabel ?: ('Batch '.now()->format('Y-m-d H:i')),
+                'amount_per_code' => $eachAmount,
+                'code_count' => $count,
+                'notes' => $notes,
+                'created_by_user_id' => $createdBy?->id,
+            ]);
+
             for ($i = 0; $i < $count; $i++) {
                 // Retry on (statistically impossible) hash collision so the
                 // batch always produces the requested count.
@@ -55,9 +71,16 @@ class TopupCodeService
                     $hash = hash('sha256', $plaintext);
                     if (! TopupCode::where('code_hash', $hash)->exists()) {
                         $model = TopupCode::create([
+                            'batch_id' => $batch->id,
                             'code_hash' => $hash,
+                            // encrypted_code goes through the model's
+                            // `encrypted` cast — never written raw.
+                            'encrypted_code' => $plaintext,
                             'amount' => $eachAmount,
-                            'batch_label' => $batchLabel,
+                            // batch_label kept for backward compat with the
+                            // pre-batch admin UI / API. Codes always link via
+                            // batch_id now.
+                            'batch_label' => $batch->label,
                             'metadata' => $metadata,
                             'created_by_user_id' => $createdBy?->id,
                         ]);
@@ -68,7 +91,7 @@ class TopupCodeService
             }
         });
 
-        return $issued;
+        return ['batch' => $batch, 'codes' => $issued];
     }
 
     /**
