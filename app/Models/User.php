@@ -5,12 +5,14 @@ namespace App\Models;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
+use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable implements FilamentUser
+class User extends Authenticatable implements FilamentUser, MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
@@ -24,6 +26,13 @@ class User extends Authenticatable implements FilamentUser
         'name',
         'email',
         'password',
+        'is_admin',
+        'vat_id',
+        'vat_validation_status',
+        'country_code',
+        'free_credit_granted_at',
+        'registration_ip_hash',
+        'registration_ua_hash',
     ];
 
     /**
@@ -34,6 +43,8 @@ class User extends Authenticatable implements FilamentUser
     protected $hidden = [
         'password',
         'remember_token',
+        'registration_ip_hash',
+        'registration_ua_hash',
     ];
 
     /**
@@ -46,6 +57,8 @@ class User extends Authenticatable implements FilamentUser
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_admin' => 'boolean',
+            'free_credit_granted_at' => 'datetime',
         ];
     }
 
@@ -54,8 +67,38 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(Chat::class);
     }
 
+    public function wallet(): HasOne
+    {
+        return $this->hasOne(Wallet::class);
+    }
+
+    public function apiTokens(): HasMany
+    {
+        return $this->hasMany(ApiToken::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return (bool) $this->is_admin;
+    }
+
+    /**
+     * Filament panel access — admin panel only for is_admin users; user panel
+     * stays open to everyone else who has verified their email. Both panels
+     * share the `web` guard, so we gate them here by panel ID rather than
+     * with separate auth guards.
+     */
     public function canAccessPanel(Panel $panel): bool
     {
-        return true;
+        // The verified-email gate lifts after the user clicks the link in
+        // their inbox. Admins are exempt — they're seeded internally and
+        // never go through the public signup flow.
+        $verified = $this->email_verified_at !== null;
+
+        return match ($panel->getId()) {
+            'admin' => $this->isAdmin(),
+            'user' => ! $this->isAdmin() && $verified,
+            default => $verified,
+        };
     }
 }

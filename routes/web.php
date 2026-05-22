@@ -5,17 +5,25 @@ use App\Http\Controllers\ChatAttachmentController;
 use App\Http\Controllers\ChatController;
 use App\Http\Controllers\ChatMessageController;
 use App\Http\Controllers\ChatPersonaController;
+use App\Http\Controllers\PaddleWebhookController;
 use App\Http\Controllers\PowerShellController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SystemController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
+// Payment processor webhook — public, no auth, signed via HMAC in the handler.
+Route::post('/paddle/webhook', PaddleWebhookController::class)->name('paddle.webhook');
+
 Route::get('/', function () {
     return redirect()->route(Auth::check() ? 'chats.index' : 'login');
 });
 
-Route::middleware(['auth'])->group(function () {
+// Chat UI and profile editing both require a verified email. Pre-existing
+// users (admin@cortex.test seeded with email_verified_at filled in) skip
+// the gate cleanly; new signups are bounced to the verify-email page until
+// they click the link.
+Route::middleware(['auth', 'verified'])->group(function () {
     // Breeze auth controllers redirect here after login.
     Route::get('/dashboard', fn () => redirect()->route('chats.index'))->name('dashboard');
 
@@ -40,7 +48,11 @@ Route::middleware(['auth'])->group(function () {
 
     Route::post('/kill-switch', [SystemController::class, 'killSwitch'])->name('kill-switch');
 
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    // The user-facing profile, password and delete-account pages now live in
+    // the Filament user panel (`/user/...`). The Breeze profile.edit route
+    // name is kept alive because middleware redirects, NavLinks and Breeze
+    // password-reset emails all still reference it.
+    Route::get('/profile', fn () => redirect('/user/profile'))->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });

@@ -37,10 +37,15 @@ class RegisteredUserController extends Controller
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 
+        // Hash IP + UA at registration time. Stored hashed (not raw) so we
+        // can spot one-IP-many-accounts farming without keeping PII; the
+        // free-credit listener uses these to throttle suspicious bursts.
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'registration_ip_hash' => hash('sha256', (string) $request->ip()),
+            'registration_ua_hash' => hash('sha256', (string) $request->userAgent()),
         ]);
 
         event(new Registered($user));

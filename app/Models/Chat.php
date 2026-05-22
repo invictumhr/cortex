@@ -15,13 +15,21 @@ class Chat extends Model
     public const STATUS_PAUSED = 'paused';
     public const STATUS_ARCHIVED = 'archived';
 
+    public const INIT_QUICK         = 'quick';
+    public const INIT_CUSTOM_MODELS = 'custom_models';
+    public const INIT_CUSTOM        = 'custom';
+
     protected $fillable = [
         'user_id',
+        'initiated_by_token_id',
         'title',
         'description',
         'context',
         'constraints',
         'strong',
+        'init_mode',
+        'panel_config',
+        'panel_composed',
         'rounds_per_turn',
         'continuous',
         'language',
@@ -48,6 +56,8 @@ class Chat extends Model
             'total_cost' => 'decimal:6',
             'last_scribe_summary_at' => 'datetime',
             'scribe_interval' => 'integer',
+            'panel_config' => 'array',
+            'panel_composed' => 'boolean',
         ];
     }
 

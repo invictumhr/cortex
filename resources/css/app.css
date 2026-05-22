@@ -1,3 +1,101 @@
+/*
+ * Cortex global styles
+ *
+ * Inter is loaded from Google Fonts (reliable + CORS-friendly). The earlier
+ * rsms.me import + aggressive font-feature-settings combo was rendering
+ * letters as decorative stylistic alternates ("©ortex"-looking caps) when
+ * the variable font failed to deliver — removed both. Plain Inter is plenty.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    html {
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    body {
+        @apply bg-ink-50 text-ink-800;
+    }
+
+    html.dark body {
+        @apply bg-ink-950 text-ink-100;
+    }
+
+    ::selection {
+        @apply bg-cortex-200 text-cortex-900;
+    }
+    html.dark ::selection {
+        @apply bg-cortex-700 text-cortex-50;
+    }
+
+    /* Discreet WebKit scrollbars — visible but never load-bearing. */
+    ::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+        @apply rounded-full bg-ink-200/60;
+    }
+    ::-webkit-scrollbar-thumb:hover { @apply bg-ink-300; }
+    html.dark ::-webkit-scrollbar-thumb { @apply bg-ink-700; }
+    html.dark ::-webkit-scrollbar-thumb:hover { @apply bg-ink-600; }
+}
+
+@layer components {
+    /* Surface = a sheet of paper. Used by cards, panels, and modal bodies. */
+    .surface {
+        @apply rounded-2xl bg-white shadow-soft ring-1 ring-ink-200/60;
+    }
+    html.dark .surface {
+        @apply bg-ink-900 ring-ink-700/60;
+    }
+
+    /* Subtle surface — used for nested cards inside a surface. */
+    .surface-muted {
+        @apply rounded-xl bg-ink-100/60 ring-1 ring-ink-200/40;
+    }
+    html.dark .surface-muted {
+        @apply bg-ink-800/60 ring-ink-700/40;
+    }
+
+    /* Button base — every interactive surface borrows from .btn. */
+    .btn {
+        @apply inline-flex items-center justify-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium
+               transition-all duration-150 ease-snap
+               focus:outline-none focus-visible:ring-2 focus-visible:ring-cortex-500/40
+               disabled:cursor-not-allowed disabled:opacity-50;
+    }
+    .btn-primary {
+        @apply btn bg-cortex-600 text-white shadow-soft
+               hover:bg-cortex-500 active:scale-[0.98];
+    }
+    .btn-ghost {
+        @apply btn text-ink-700 hover:bg-ink-100;
+    }
+    html.dark .btn-ghost {
+        @apply text-ink-200 hover:bg-ink-800;
+    }
+    .btn-soft {
+        @apply btn bg-ink-100 text-ink-700 hover:bg-ink-200;
+    }
+    html.dark .btn-soft {
+        @apply bg-ink-800 text-ink-200 hover:bg-ink-700;
+    }
+
+    /* Pill — for small status / model / round indicators. */
+    .pill {
+        @apply inline-flex items-center gap-1 rounded-full bg-ink-100 px-2 py-0.5
+               text-[11px] font-medium text-ink-600 ring-1 ring-ink-200/60;
+    }
+    html.dark .pill {
+        @apply bg-ink-800 text-ink-300 ring-ink-700/60;
+    }
+}

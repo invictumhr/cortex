@@ -212,15 +212,40 @@ class CortexDiscuss extends Command
         }
         $this->newLine();
 
-        $this->info(sprintf(
-            'Gotovo za %ss — ukupno %d poruka, trošak €%s, tokeni %d/%d. Otvori u UI: /chats/%d',
-            $elapsed,
-            $chat->total_messages,
-            number_format((float) $chat->total_cost, 6),
-            $chat->total_input_tokens,
-            $chat->total_output_tokens,
-            $chat->id,
-        ));
+        // Detect incomplete runs — a bounded CLI chat that ends paused before the last
+        // round shouldn't happen under normal conditions. Surface it as a warning instead
+        // of pretending the discussion finished successfully.
+        $incomplete = ! $chat->continuous
+            && $chat->status === Chat::STATUS_PAUSED
+            && (int) $chat->current_round < (int) $chat->rounds_per_turn;
+
+        $headline = $incomplete
+            ? sprintf(
+                'Nepotpuno za %ss — rasprava pauzirana u krugu %d/%d, %d poruka, trošak €%s. Nastavi s --chat=%d',
+                $elapsed,
+                (int) $chat->current_round,
+                (int) $chat->rounds_per_turn,
+                $chat->total_messages,
+                number_format((float) $chat->total_cost, 6),
+                $chat->id,
+            )
+            : sprintf(
+                'Gotovo za %ss — ukupno %d poruka, trošak €%s, tokeni %d/%d. Otvori u UI: /chats/%d',
+                $elapsed,
+                $chat->total_messages,
+                number_format((float) $chat->total_cost, 6),
+                $chat->total_input_tokens,
+                $chat->total_output_tokens,
+                $chat->id,
+            );
+
+        if ($incomplete) {
+            $this->warn($headline);
+
+            return self::FAILURE;
+        }
+
+        $this->info($headline);
 
         return self::SUCCESS;
     }

@@ -11,12 +11,14 @@ use App\Models\Persona;
 use App\Models\ScribeSummary;
 use App\Services\Ai\AiProviderFactory;
 use App\Services\Ai\Data\AiMessage;
+use App\Services\Billing\WalletService;
 
 class ScribeService
 {
     public function __construct(
         private AiProviderFactory $factory,
         private KnowledgeService $knowledge,
+        private WalletService $walletService,
     ) {}
 
     /**
@@ -80,16 +82,61 @@ class ScribeService
             ->map(fn (ChatMessage $m) => '['.($m->role === ChatMessage::ROLE_USER ? 'Korisnik' : ($m->persona?->name ?? 'Persona')).']: '.trim((string) $m->content))
             ->implode("\n\n");
 
-        $adapter = $this->factory->for($scribe->aiModel);
+        // Scribe runs on the chat owner's wallet — bill it the same way as
+        // a persona contribution. Reserve up-front so the owner can't sneak
+        // past the budget by spawning long discussions.
+        $wallet = $this->walletService->forUser($chat->user);
+        $margin = $this->walletService->marginMultiplierFor($chat->user);
+        $estimatedUserCost = $this->estimateScribeUserCost($scribe->aiModel, $margin);
 
-        $response = $adapter->sendMessage(
-            $this->scribeSystemPrompt($chat, $scribe, $final),
-            [AiMessage::user("Sažmi sljedeću raspravu boardrooma:\n\n".$transcript)],
-            ['max_tokens' => (int) config('cortex.scribe_max_tokens', 2200), 'temperature' => 0.3],
+        $reserve = $this->walletService->reserve(
+            $wallet,
+            $estimatedUserCost,
+            $scribe->aiModel,
+            sourceType: 'chat',
+            sourceId: $chat->id,
+            metadata: ['role' => 'scribe', 'final' => $final],
         );
 
-        $cost = $adapter->calculateCost($response->inputTokens, $response->outputTokens);
+        $adapter = $this->factory->for($scribe->aiModel);
+
+        try {
+            $response = $adapter->sendMessage(
+                $this->scribeSystemPrompt($chat, $scribe, $final),
+                [AiMessage::user("Sažmi sljedeću raspravu boardrooma:\n\n".$transcript)],
+                ['max_tokens' => (int) config('cortex.scribe_max_tokens', 2200), 'temperature' => 0.3],
+            );
+        } catch (\Throwable $e) {
+            $this->walletService->release($reserve, 'scribe_call_failed');
+            throw $e;
+        }
+
+        $providerCost = (float) $adapter->calculateCost($response->inputTokens, $response->outputTokens);
+        $userCost = round($providerCost * $margin, 6);
         $parsed = $this->parseScribeOutput($response->content);
+
+        // Settle the wallet hold. An empty scribe response still gets debited —
+        // the model did the work even if our prompt failed to coax a parseable JSON.
+        if ($response->outputTokens > 0) {
+            $settled = $this->walletService->commitDebit(
+                $reserve,
+                providerCost: $providerCost,
+                actualUserCost: $userCost,
+                sourceType: 'chat',
+                sourceId: $chat->id,
+                metadata: ['role' => 'scribe', 'final' => $final, 'margin' => $margin],
+            );
+            $walletTxId = $settled['debit']->id;
+        } else {
+            $this->walletService->release($reserve, 'scribe_empty_response');
+            $providerCost = 0.0;
+            $userCost = 0.0;
+            $walletTxId = null;
+        }
+
+        // Legacy `cost` column on scribe_summaries keeps provider_cost for
+        // back-compat with existing dashboards.
+        $cost = $providerCost;
 
         $summary = ScribeSummary::create([
             'chat_id' => $chat->id,
@@ -120,10 +167,15 @@ class ScribeService
             'input_tokens' => $response->inputTokens,
             'output_tokens' => $response->outputTokens,
             'cost' => $cost,
+            'is_billable' => $walletTxId !== null,
+            'provider_cost' => $providerCost,
+            'user_cost' => $userCost,
+            'finish_reason' => $response->finishReason ?? null,
+            'wallet_transaction_id' => $walletTxId,
             'model_used' => $scribe->aiModel->model_string,
             'provider_used' => $scribe->aiModel->provider?->name,
             'response_time_ms' => $response->responseTimeMs,
-            'metadata' => ['scribe_summary_id' => $summary->id, 'final' => $final],
+            'metadata' => ['scribe_summary_id' => $summary->id, 'final' => $final, 'margin' => $margin],
         ]);
 
         $chat->increment('total_messages');
@@ -143,6 +195,21 @@ class ScribeService
         }
 
         return $summary;
+    }
+
+    /**
+     * Pre-flight estimate for a scribe call — much bigger output budget than
+     * a persona since scribe writes the full structured synthesis. Uses the
+     * scribe_max_tokens config as the upper bound times a small safety bias.
+     */
+    private function estimateScribeUserCost(\App\Models\AiModel $model, float $margin): float
+    {
+        $estimatedInputTokens = (int) config('cortex.context_message_limit', 30) * 400;
+        $estimatedOutputTokens = (int) config('cortex.scribe_max_tokens', 2200);
+
+        $providerEstimate = (float) $model->calculateCost($estimatedInputTokens, $estimatedOutputTokens);
+
+        return max(0.0001, round($providerEstimate * $margin * 1.1, 6));
     }
 
     /**

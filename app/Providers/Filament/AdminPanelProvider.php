@@ -6,6 +6,11 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use App\Filament\Widgets\CostOverTimeChart;
+use App\Filament\Widgets\MarginOverviewWidget;
+use App\Filament\Widgets\ProviderCostBreakdownWidget;
+use App\Filament\Widgets\TopSpendersWidget;
+use App\Filament\Widgets\TopupCodeStatsWidget;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -39,6 +44,11 @@ class AdminPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
                 AccountWidget::class,
+                MarginOverviewWidget::class,
+                TopupCodeStatsWidget::class,
+                CostOverTimeChart::class,
+                ProviderCostBreakdownWidget::class,
+                TopSpendersWidget::class,
                 FilamentInfoWidget::class,
             ])
             ->middleware([

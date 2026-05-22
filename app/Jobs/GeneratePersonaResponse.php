@@ -16,6 +16,7 @@ use App\Services\Chat\ScribeService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class GeneratePersonaResponse implements ShouldQueue
@@ -53,6 +54,12 @@ class GeneratePersonaResponse implements ShouldQueue
         }
 
         if ($chat->status !== Chat::STATUS_ACTIVE) {
+            // Job was queued while chat was active, but something paused the chat
+            // before it ran. For continuous chats this is the normal "user left" path
+            // (handled below) — but for bounded CLI runs it's a bug that would otherwise
+            // strand the discussion silently. Surface it.
+            $this->reportUnexpectedPause($chat, 'pre_respond');
+
             return;
         }
 
@@ -101,7 +108,11 @@ class GeneratePersonaResponse implements ShouldQueue
         }
 
         // A pause requested mid-round is honoured before the next persona.
+        // For continuous chats this is normal (user clicked pause). For bounded CLI
+        // runs this should never happen — if it does, it's a bug we want visible.
         if ($chat->status !== Chat::STATUS_ACTIVE) {
+            $this->reportUnexpectedPause($chat, 'post_respond');
+
             return;
         }
 
@@ -144,7 +155,50 @@ class GeneratePersonaResponse implements ShouldQueue
 
         if ($chat) {
             $chat->update(['status' => Chat::STATUS_PAUSED]);
+
+            // Leave a breadcrumb in the chat itself so the failure is visible in the
+            // UI / CLI output — without this, a sync-mode failure that bypassed the
+            // try/catch in handle() would silently strand the discussion.
+            $systemMessage = ChatMessage::create([
+                'chat_id' => $chat->id,
+                'role' => ChatMessage::ROLE_SYSTEM,
+                'content' => '⚠️ Job failed — discussion paused. '.($e ? $e->getMessage() : 'no exception details'),
+                'round_number' => $this->round,
+                'turn_number' => $this->turn,
+            ]);
+            broadcast(new ChatMessageCreated($systemMessage));
             broadcast(new TurnCompleted($chat->refresh(), 'error'));
         }
+    }
+
+    /**
+     * The chat is paused mid-turn when it shouldn't be. For continuous web chats this
+     * is the normal "user clicked pause" path (silent return is correct). For bounded
+     * CLI runs, this means *something* set the status to paused that we can't trace —
+     * surface it loudly so the CLI shows the problem and we have a breadcrumb to debug.
+     */
+    private function reportUnexpectedPause(Chat $chat, string $where): void
+    {
+        $tag = "chat={$chat->id} round={$this->round} pos={$this->position}/".count($this->personaIds)." where={$where}";
+
+        // Continuous chats use status=paused as the normal "user closed the tab" exit
+        // path — silent return is correct, no need to alarm.
+        if ($chat->continuous) {
+            Log::info("[gpr] continuous chat paused mid-turn (expected): $tag");
+
+            return;
+        }
+
+        Log::warning("[gpr] UNEXPECTED PAUSE mid-turn: $tag");
+
+        $systemMessage = ChatMessage::create([
+            'chat_id' => $chat->id,
+            'role' => ChatMessage::ROLE_SYSTEM,
+            'content' => "⚠️ Rasprava je neočekivano pauzirana usred kruga {$this->round} (na poziciji ".($this->position + 1).' od '.count($this->personaIds).'). Pokreni ponovno s --chat='.$chat->id.' ili nastavi pauziranu raspravu.',
+            'round_number' => $this->round,
+            'turn_number' => $this->turn,
+        ]);
+        broadcast(new ChatMessageCreated($systemMessage));
+        broadcast(new TurnCompleted($chat, 'paused_unexpectedly'));
     }
 }

@@ -14,6 +14,7 @@ class ChatPersona extends Pivot
     protected $fillable = [
         'chat_id',
         'persona_id',
+        'ai_model_id',
         'is_active',
         'joined_at',
         'left_at',
@@ -40,5 +41,11 @@ class ChatPersona extends Pivot
     public function persona(): BelongsTo
     {
         return $this->belongsTo(Persona::class);
+    }
+
+    /** Per-chat AI model override — when null, persona's default model is used. */
+    public function aiModel(): BelongsTo
+    {
+        return $this->belongsTo(AiModel::class);
     }
 }

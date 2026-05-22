@@ -26,6 +26,11 @@ class ChatMessage extends Model
         'input_tokens',
         'output_tokens',
         'cost',
+        'is_billable',
+        'provider_cost',
+        'user_cost',
+        'finish_reason',
+        'wallet_transaction_id',
         'model_used',
         'provider_used',
         'response_time_ms',
@@ -41,10 +46,18 @@ class ChatMessage extends Model
             'input_tokens' => 'integer',
             'output_tokens' => 'integer',
             'cost' => 'decimal:6',
+            'is_billable' => 'boolean',
+            'provider_cost' => 'decimal:6',
+            'user_cost' => 'decimal:6',
             'response_time_ms' => 'integer',
             'has_attachments' => 'boolean',
             'metadata' => 'array',
         ];
+    }
+
+    public function walletTransaction(): BelongsTo
+    {
+        return $this->belongsTo(WalletTransaction::class);
     }
 
     public function chat(): BelongsTo

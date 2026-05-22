@@ -10,6 +10,7 @@ use App\Jobs\GeneratePersonaResponse;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 class ChatOrchestrator
 {
@@ -78,7 +79,18 @@ class ChatOrchestrator
             ->all();
 
         if ($speakerIds === []) {
+            Log::warning("[orchestrator] startRound aborted — no active speakers for chat={$chat->id} round={$round}");
             $chat->update(['status' => Chat::STATUS_PAUSED]);
+
+            // Visible breadcrumb so the CLI/UI doesn't pretend the round started.
+            $systemMessage = ChatMessage::create([
+                'chat_id' => $chat->id,
+                'role' => ChatMessage::ROLE_SYSTEM,
+                'content' => "⚠️ Nema aktivnih persona za krug {$round} — rasprava je pauzirana.",
+                'round_number' => $round,
+                'turn_number' => $turn,
+            ]);
+            broadcast(new ChatMessageCreated($systemMessage));
             broadcast(new RoundCompleted($chat, $round));
             broadcast(new TurnCompleted($chat->refresh(), 'no_personas'));
 

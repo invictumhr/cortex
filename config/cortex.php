@@ -89,6 +89,94 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Billing (multi-user SaaS)
+    |--------------------------------------------------------------------------
+    | All amounts in EUR. The wallet ledger is the source of truth — these
+    | values control how new rows get priced and reserved.
+    */
+
+    'billing' => [
+        // Margin multiplier applied to provider_cost when debiting the user.
+        // Tier-based: enterprise kicks in for users who've spent more than
+        // `enterprise_threshold_eur` in the trailing 30 days.
+        'margin_hobby' => (float) env('CORTEX_MARGIN_HOBBY', 2.0),
+        'margin_enterprise' => (float) env('CORTEX_MARGIN_ENTERPRISE', 1.7),
+        'enterprise_threshold_eur' => (float) env('CORTEX_ENTERPRISE_THRESHOLD', 100.0),
+
+        // Free credit policy (set once per user on signup).
+        // Option B from the design: small immediate bonus + larger one after
+        // a real first deposit, so abuse is bounded but trial isn't gated.
+        'free_credit_signup' => (float) env('CORTEX_FREE_CREDIT_SIGNUP', 0.50),
+        'free_credit_first_deposit' => (float) env('CORTEX_FREE_CREDIT_FIRST_DEPOSIT', 1.00),
+        'first_deposit_threshold' => (float) env('CORTEX_FIRST_DEPOSIT_THRESHOLD', 5.0),
+
+        // Minimum top-up — Paddle's fee floor makes amounts below this unprofitable.
+        'min_topup_eur' => (float) env('CORTEX_MIN_TOPUP', 5.0),
+
+        // Pre-flight estimate uses p90 historical output tokens — fallback for
+        // a fresh install with no history.
+        'estimate_fallback_output_tokens' => (int) env('CORTEX_ESTIMATE_FALLBACK_OUTPUT_TOKENS', 800),
+
+        // Snapshot pricing TTL. Cortex absorbs any provider price change inside
+        // this window so a user doesn't get "insufficient funds" mid-run.
+        // Shorter than the Cortex panel's 24h to reduce margin drift exposure.
+        'rate_snapshot_ttl_hours' => (int) env('CORTEX_RATE_SNAPSHOT_TTL_HOURS', 6),
+
+        // Poison pill — if actual cost overshoots reserved cost by this factor,
+        // the debit still goes through but an admin alert fires. Doesn't pause
+        // the user's discussion (poor UX), just surfaces the drift to ops.
+        'poison_pill_ratio' => (float) env('CORTEX_POISON_PILL_RATIO', 1.3),
+
+        // Minimum available balance required to even attempt sending a new
+        // message. Bigger than a single token but well below a real persona
+        // call — catches the "wallet is empty" case fast and returns a 402.
+        'min_send_balance' => (float) env('CORTEX_MIN_SEND_BALANCE', 0.05),
+
+        // UI low-balance warning threshold — banner appears in the chat
+        // header when available balance drops below this. Doesn't block.
+        'low_balance_warning' => (float) env('CORTEX_LOW_BALANCE_WARNING', 0.50),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Paddle payment integration (merchant of record for EU VAT)
+    |--------------------------------------------------------------------------
+    | Set these in .env once you have a Paddle vendor account:
+    |   PADDLE_VENDOR_ID=...
+    |   PADDLE_WEBHOOK_SECRET=...     (used to verify webhook signatures)
+    |   PADDLE_PRICE_TOPUP_5=pri_…    (one Paddle "Price" object per top-up tier)
+    |   PADDLE_PRICE_TOPUP_10=pri_…
+    |   PADDLE_PRICE_TOPUP_25=pri_…
+    |   PADDLE_PRICE_TOPUP_50=pri_…
+    */
+
+    'paddle' => [
+        'vendor_id' => env('PADDLE_VENDOR_ID'),
+        'webhook_secret' => env('PADDLE_WEBHOOK_SECRET'),
+        // Map Paddle Price IDs to the EUR amount they top up. Keys are
+        // arbitrary labels for the UI; values are [price_id, eur].
+        'topup_tiers' => [
+            '5_eur'  => ['price_id' => env('PADDLE_PRICE_TOPUP_5'),  'amount' => 5.0],
+            '10_eur' => ['price_id' => env('PADDLE_PRICE_TOPUP_10'), 'amount' => 10.0],
+            '25_eur' => ['price_id' => env('PADDLE_PRICE_TOPUP_25'), 'amount' => 25.0],
+            '50_eur' => ['price_id' => env('PADDLE_PRICE_TOPUP_50'), 'amount' => 50.0],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | API rate limits (default per token; admin can raise per-token)
+    |--------------------------------------------------------------------------
+    */
+
+    'api_rate_limit' => [
+        'per_day' => (int) env('CORTEX_API_RATE_PER_DAY', 50),
+        'per_hour' => (int) env('CORTEX_API_RATE_PER_HOUR', 10),
+        'concurrent' => (int) env('CORTEX_API_RATE_CONCURRENT', 3),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | PowerShell executor sidecar
     |--------------------------------------------------------------------------
     */

@@ -9,6 +9,7 @@ use App\Models\ChatMessage;
 use App\Models\Persona;
 use App\Services\Ai\AiProviderFactory;
 use App\Services\Ai\Data\AiMessage;
+use App\Services\Billing\WalletService;
 use Throwable;
 
 /**
@@ -17,7 +18,10 @@ use Throwable;
  */
 class ChairService
 {
-    public function __construct(private AiProviderFactory $factory) {}
+    public function __construct(
+        private AiProviderFactory $factory,
+        private WalletService $walletService,
+    ) {}
 
     public function decide(Chat $chat): ?ChatMessage
     {
@@ -48,6 +52,22 @@ class ChairService
             $basis .= "\n\nTVRDA OGRANIČENJA koja odluka MORA poštovati:\n".trim((string) $chat->constraints);
         }
 
+        // Bill the chair to the chat owner's wallet — same reserve/commit/release
+        // pattern as personas. Chair output is small (max 900 tokens), so the
+        // estimate stays tight.
+        $wallet = $this->walletService->forUser($chat->user);
+        $margin = $this->walletService->marginMultiplierFor($chat->user);
+        $estimatedUserCost = $this->estimateChairUserCost($chair->aiModel, $margin);
+
+        $reserve = $this->walletService->reserve(
+            $wallet,
+            $estimatedUserCost,
+            $chair->aiModel,
+            sourceType: 'chat',
+            sourceId: $chat->id,
+            metadata: ['role' => 'chair'],
+        );
+
         try {
             $response = $this->factory->for($chair->aiModel)->sendMessage(
                 $this->chairSystemPrompt($chat, $chair),
@@ -55,14 +75,28 @@ class ChairService
                 ['max_tokens' => 900, 'temperature' => 0.2],
             );
         } catch (Throwable) {
+            $this->walletService->release($reserve, 'chair_call_failed');
+
             return null;
         }
 
         if (trim($response->content) === '') {
+            $this->walletService->release($reserve, 'chair_empty_response');
+
             return null;
         }
 
-        $cost = $chair->aiModel->calculateCost($response->inputTokens, $response->outputTokens);
+        $providerCost = (float) $chair->aiModel->calculateCost($response->inputTokens, $response->outputTokens);
+        $userCost = round($providerCost * $margin, 6);
+
+        $settled = $this->walletService->commitDebit(
+            $reserve,
+            providerCost: $providerCost,
+            actualUserCost: $userCost,
+            sourceType: 'chat',
+            sourceId: $chat->id,
+            metadata: ['role' => 'chair', 'margin' => $margin],
+        );
 
         $message = ChatMessage::create([
             'chat_id' => $chat->id,
@@ -73,22 +107,41 @@ class ChairService
             'turn_number' => (int) ($chat->messages()->max('turn_number') ?? 1),
             'input_tokens' => $response->inputTokens,
             'output_tokens' => $response->outputTokens,
-            'cost' => $cost,
+            'cost' => $providerCost,
+            'is_billable' => true,
+            'provider_cost' => $providerCost,
+            'user_cost' => $userCost,
+            'finish_reason' => $response->finishReason ?? null,
+            'wallet_transaction_id' => $settled['debit']->id,
             'model_used' => $chair->aiModel->model_string,
             'provider_used' => $chair->aiModel->provider?->name,
             'response_time_ms' => $response->responseTimeMs,
-            'metadata' => ['chair_decision' => true],
+            'metadata' => ['chair_decision' => true, 'margin' => $margin],
         ]);
 
         $chat->increment('total_messages');
         $chat->increment('total_input_tokens', $response->inputTokens);
         $chat->increment('total_output_tokens', $response->outputTokens);
-        $chat->increment('total_cost', $cost);
+        $chat->increment('total_cost', $providerCost);
 
         broadcast(new ChatMessageCreated($message));
         broadcast(new ChatCostUpdated($chat->refresh()));
 
         return $message;
+    }
+
+    /**
+     * Pre-flight estimate for a chair call — chair is bounded to 900 output
+     * tokens by prompt design, so this is tight by construction.
+     */
+    private function estimateChairUserCost(\App\Models\AiModel $model, float $margin): float
+    {
+        $estimatedInputTokens = 4000; // scribe summary + constraints
+        $estimatedOutputTokens = 900;
+
+        $providerEstimate = (float) $model->calculateCost($estimatedInputTokens, $estimatedOutputTokens);
+
+        return max(0.0001, round($providerEstimate * $margin * 1.1, 6));
     }
 
     private function chairSystemPrompt(Chat $chat, Persona $chair): string
