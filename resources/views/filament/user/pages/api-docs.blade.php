@@ -407,6 +407,82 @@
 <span class="punc">}</span></pre>
     </x-filament::section>
 
+    {{-- ===== Available Models ============================================ --}}
+    @php
+        $aiModels = $this->getModels();
+        $grouped = $aiModels->groupBy(fn ($m) => $m->provider->name ?? 'Unknown');
+
+        $providerPills = [
+            'Anthropic' => 'pill-violet',
+            'OpenAI'    => 'pill-green',
+            'xAI'       => 'pill-blue',
+            'Google'    => 'pill-blue',
+            'Mistral'   => 'pill-amber',
+            'DeepSeek'  => 'pill-green',
+        ];
+
+        $formatCtx = function (int $tokens): string {
+            return $tokens >= 1000000 ? (int) ($tokens / 1000000) . 'M' : (int) ($tokens / 1000) . 'k';
+        };
+    @endphp
+
+    <x-filament::section icon="heroicon-o-cpu-chip">
+        <x-slot name="heading">Available models</x-slot>
+
+        <p class="text-sm text-gray-700 dark:text-gray-300 mb-4">
+            Pass any <code class="mono-inline">model_string</code> below in the
+            <code class="mono-inline">models</code> array of <code class="mono-inline">POST /discuss</code>
+            to pick the exact AI engine for each boardroom seat. If omitted, the
+            system auto-selects based on topic complexity.
+        </p>
+
+        <div class="cortex-table-wrap">
+            <table class="cortex-table">
+                <thead>
+                    <tr>
+                        <th class="cortex-th">Provider</th>
+                        <th class="cortex-th">Model</th>
+                        <th class="cortex-th" style="white-space: nowrap;">Model ID</th>
+                        <th class="cortex-th" style="text-align: right;">Context</th>
+                        <th class="cortex-th" style="text-align: right; white-space: nowrap;">Input $/1M</th>
+                        <th class="cortex-th" style="text-align: right; white-space: nowrap;">Output $/1M</th>
+                        <th class="cortex-th" style="text-align: center;">Vision</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($grouped as $providerName => $models)
+                        @foreach ($models as $i => $m)
+                            <tr>
+                                @if ($i === 0)
+                                    <td class="cortex-td" rowspan="{{ $models->count() }}" style="vertical-align: top; padding-top: 0.85rem;">
+                                        <span class="cortex-method-pill {{ $providerPills[$providerName] ?? 'pill-gray' }}">{{ $providerName }}</span>
+                                    </td>
+                                @endif
+                                <td class="cortex-td" style="font-weight: 500;">{{ $m->name }}</td>
+                                <td class="cortex-td cortex-td-mono">{{ $m->model_string }}</td>
+                                <td class="cortex-td" style="text-align: right; white-space: nowrap;">{{ $formatCtx($m->max_context_tokens) }}</td>
+                                <td class="cortex-td cortex-td-mono" style="text-align: right;">${{ number_format($m->input_cost_per_1m_tokens, 2) }}</td>
+                                <td class="cortex-td cortex-td-mono" style="text-align: right;">${{ number_format($m->output_cost_per_1m_tokens, 2) }}</td>
+                                <td class="cortex-td" style="text-align: center;">
+                                    @if ($m->supports_vision)
+                                        <span style="color: rgb(34 197 94);">&#10003;</span>
+                                    @else
+                                        <span style="color: rgb(156 163 175);">&mdash;</span>
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+            Prices are approximate provider rates in USD per 1 million tokens.
+            Your wallet is debited in EUR at provider cost &times; your margin tier ({{ config('cortex.billing.margin_hobby') }}&times; hobby / {{ config('cortex.billing.margin_enterprise') }}&times; enterprise).
+        </p>
+    </x-filament::section>
+
     {{-- ===== Endpoint sections ========================================= --}}
     @foreach ($endpoints as $ep)
         <x-filament::section :icon="$ep['icon']">

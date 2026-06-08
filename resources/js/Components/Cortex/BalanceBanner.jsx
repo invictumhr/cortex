@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { usePage } from '@inertiajs/react';
 import { useT } from '@/i18n/I18nProvider';
 
 /**
@@ -45,7 +45,7 @@ export default function BalanceBanner({ compact = false }) {
 
     if (compact) {
         return (
-            <Link
+            <a
                 href={topup_url}
                 className={`inline-flex items-center gap-2 rounded-full ${palette.bg} px-3 py-1 text-xs font-medium ${palette.text} ring-1 ${palette.ring}`}
             >
@@ -54,7 +54,7 @@ export default function BalanceBanner({ compact = false }) {
                     {empty ? t('balance.compactEmpty') : t('balance.compactLow', { amount: available.toFixed(2) })}
                 </span>
                 <ArrowRightIcon className="h-3 w-3" />
-            </Link>
+            </a>
         );
     }
 
@@ -69,13 +69,13 @@ export default function BalanceBanner({ compact = false }) {
                     <p className={`text-xs ${palette.text} opacity-80`}>{body}</p>
                 </div>
             </div>
-            <Link
+            <a
                 href={topup_url}
                 className={`shrink-0 inline-flex items-center gap-1.5 rounded-xl ${palette.btn} px-3.5 py-2 text-xs font-medium shadow-soft transition-colors`}
             >
                 {t('balance.topup')}
                 <ArrowRightIcon className="h-3.5 w-3.5" />
-            </Link>
+            </a>
         </div>
     );
 }

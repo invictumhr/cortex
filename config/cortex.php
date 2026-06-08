@@ -36,19 +36,19 @@ return [
 
     // `--strong` runs each panel persona on its provider's flagship model.
     'flagship_models' => [
-        'anthropic' => 'claude-opus-4-7',
-        'openai' => 'o3',
-        'xai' => 'grok-3',
+        'anthropic' => 'claude-opus-4-8',
+        'openai' => 'gpt-5.5',
+        'xai' => 'grok-4.3',
         'google' => 'gemini-2.5-pro',
-        'mistral' => 'mistral-large-latest',
-        'deepseek' => 'deepseek-chat',
+        'mistral' => 'mistral-medium-latest',
+        'deepseek' => 'deepseek-v4-pro',
     ],
 
     // `--architect`: a model designs a question-specific panel of roles, and
     // those generated roles run (round-robin) on this spread of models.
     'architect_model' => env('CORTEX_ARCHITECT_MODEL', 'claude-sonnet-4-6'),
     'architect_panel_models' => [
-        'claude-sonnet-4-6', 'gpt-4.1', 'grok-3', 'gemini-2.5-flash', 'mistral-large-latest', 'deepseek-chat',
+        'claude-sonnet-4-6', 'gpt-5.4', 'grok-4.3', 'gemini-3.5-flash', 'mistral-large-latest', 'deepseek-v4-flash',
     ],
 
     // `cortex:benchmark` — the single-model control and the neutral evaluator.
@@ -62,26 +62,29 @@ return [
     // new model without touching this list; it just won't be auto-picked).
     'model_tiers' => [
         'small' => [
-            'gpt-4o-mini',
+            'gpt-5.4-nano',
+            'gpt-5.4-mini',
             'claude-haiku-4-5-20251001',
+            'gemini-2.5-flash-lite',
             'gemini-2.5-flash',
-            'deepseek-chat',
+            'mistral-small-latest',
+            'deepseek-v4-flash',
         ],
         'medium' => [
-            'gpt-4o',
+            'gpt-5.4',
             'claude-sonnet-4-6',
-            'grok-3',
+            'grok-4.3',
             'mistral-large-latest',
-            'gemini-2.5-flash',
-            'deepseek-chat',
+            'gemini-3.5-flash',
+            'deepseek-v4-flash',
         ],
         'flagship' => [
-            'gpt-4.1',
+            'gpt-5.5',
             'o3',
-            'claude-opus-4-7',
+            'claude-opus-4-8',
             'gemini-2.5-pro',
-            'grok-3',
-            'mistral-large-latest',
+            'grok-4.3',
+            'mistral-medium-latest',
         ],
     ],
 

@@ -2,10 +2,12 @@
 
 namespace App\Filament\User\Pages;
 
+use App\Models\AiModel;
 use App\Models\ApiToken;
 use BackedEnum;
 use Filament\Pages\Page;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Support\Collection;
 
 /**
  * Self-serve REST API reference for /user. Sits in the "Developers" nav group
@@ -44,5 +46,16 @@ class ApiDocs extends Page
     public function getScopes(): array
     {
         return ApiToken::availableScopes();
+    }
+
+    /** Active AI models grouped by provider for the "Available Models" table. */
+    public function getModels(): Collection
+    {
+        return AiModel::query()
+            ->where('is_active', true)
+            ->with('provider:id,name,slug')
+            ->orderBy('ai_provider_id')
+            ->orderByDesc('input_cost_per_1m_tokens')
+            ->get();
     }
 }

@@ -17,51 +17,51 @@ class PersonaModelSeeder extends Seeder
     {
         $map = [
             // Flagship reasoning — strategy & security
-            'marco' => 'claude-opus-4-7',
+            'marco' => 'claude-opus-4-8',
             'zara' => 'claude-opus-4-7',
             // OpenAI reasoning model — architecture & mathematics
             'ana' => 'o3',
-            'ada' => 'o3',
+            'ada' => 'gpt-5.5',
             // Strong general — product & legal
             'helena' => 'claude-sonnet-4-6',
-            'iris' => 'claude-sonnet-4-6',
-            // Legacy Opus — deep science
-            'nikola' => 'claude-opus-4-20250514',
-            'chen' => 'claude-opus-4-20250514',
+            'iris' => 'gpt-5.4',
+            // Deep science (migrated from legacy opus-4)
+            'nikola' => 'claude-opus-4-7',
+            'chen' => 'claude-opus-4-8',
             // Large-context analytical — systems & futures
             'darwin' => 'gpt-4.1',
-            'hawking' => 'gpt-4.1',
-            // Legacy Sonnet — delivery & ethics
-            'max' => 'claude-sonnet-4-20250514',
-            'rosa' => 'claude-sonnet-4-20250514',
+            'hawking' => 'gpt-5.4',
+            // Delivery & ethics (migrated from legacy sonnet-4)
+            'max' => 'claude-sonnet-4-6',
+            'rosa' => 'gpt-5.4',
             // Creative/visual
             'luna' => 'gpt-4o',
-            'frida' => 'gpt-4o',
+            'frida' => 'gemini-3.5-flash',
             // Broad, multilingual — UX & localization
             'miro' => 'gemini-2.5-flash',
-            'yuki' => 'gemini-2.5-flash',
+            'yuki' => 'gemini-3.5-flash',
             // Edgy / adversarial — skeptic, red team, aggressive sales
-            'viktor' => 'grok-3',
-            'ghost' => 'grok-3',
-            'leo' => 'grok-3',
+            'viktor' => 'grok-4.3',
+            'ghost' => 'grok-4.3',
+            'leo' => 'grok-4.3',
             // Solid generalist — frontend, devops, copy
-            'kai' => 'mistral-large-latest',
+            'kai' => 'mistral-medium-latest',
             'rex' => 'mistral-large-latest',
             'oscar' => 'mistral-large-latest',
             // Capable & economical — QA, education, energy
-            'petra' => 'deepseek-chat',
-            'mara' => 'deepseek-chat',
-            'tesla' => 'deepseek-chat',
+            'petra' => 'deepseek-v4-flash',
+            'mara' => 'deepseek-v4-flash',
+            'tesla' => 'deepseek-v4-pro',
             // Fast & light — conversational & growth, plus the scribe
             'sophia' => 'claude-haiku-4-5-20251001',
-            'kira' => 'claude-haiku-4-5-20251001',
+            'kira' => 'gpt-5.4-mini',
             'scribe' => 'claude-haiku-4-5-20251001',
             // Light tier — non-expert client & playful game designer
-            'dragan' => 'gpt-4o-mini',
-            'pixel' => 'gpt-4o-mini',
+            'dragan' => 'gpt-5.4-nano',
+            'pixel' => 'mistral-small-latest',
             // Realist — feasibility judgment; Chair — final decision
             'realist' => 'claude-sonnet-4-6',
-            'chair' => 'claude-opus-4-7',
+            'chair' => 'claude-opus-4-8',
         ];
 
         $modelIds = AiModel::query()->pluck('id', 'model_string');

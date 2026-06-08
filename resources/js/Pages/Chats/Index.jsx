@@ -133,10 +133,10 @@ export default function Index({ chats, personas, models }) {
                                         </span>
                                     )}
                                     {walletEmpty ? (
-                                        <Link href={wallet.topup_url} className="btn-primary !bg-rose-600 hover:!bg-rose-500">
+                                        <a href={wallet.topup_url} className="btn-primary !bg-rose-600 hover:!bg-rose-500">
                                             {t('welcome.topupBtn')}
                                             <ArrowRightIcon className="h-4 w-4" />
-                                        </Link>
+                                        </a>
                                     ) : (
                                         <button type="submit" disabled={!ready} className="btn-primary">
                                             {t('welcome.startBtn')}

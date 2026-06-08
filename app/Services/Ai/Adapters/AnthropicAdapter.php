@@ -24,8 +24,9 @@ class AnthropicAdapter extends AbstractAdapter
             'messages' => $this->buildMessages($this->normalizeMessages($messages)),
         ];
 
-        // Opus 4.7+ rejects the deprecated `temperature` parameter.
-        if (isset($options['temperature']) && ! str_starts_with($this->modelString(), 'claude-opus-4-7')) {
+        // Opus 4.7+ rejects the `temperature` parameter.
+        $rejectsTemperature = preg_match('/^claude-opus-4-[7-9]/', $this->modelString());
+        if (isset($options['temperature']) && ! $rejectsTemperature) {
             $payload['temperature'] = (float) $options['temperature'];
         }
 

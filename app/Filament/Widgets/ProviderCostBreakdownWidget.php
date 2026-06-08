@@ -39,17 +39,23 @@ class ProviderCostBreakdownWidget extends Widget
             ->orderByDesc('user_cost')
             ->get();
 
-        $providerNames = AiProvider::pluck('name', 'id')->all();
+        $providers = AiProvider::all()->keyBy('id');
 
         return [
             'heading' => self::$heading,
             'rows' => $rows->map(fn ($r) => [
-                'provider' => $providerNames[$r->provider_id] ?? 'Unknown',
+                'provider' => $providers[$r->provider_id]->name ?? 'Unknown',
+                'dashboard_url' => $providers[$r->provider_id]->billing_dashboard_url ?? null,
                 'call_count' => (int) $r->call_count,
                 'provider_cost' => (float) $r->provider_cost,
                 'user_cost' => (float) $r->user_cost,
                 'margin' => (float) $r->user_cost - (float) $r->provider_cost,
             ])->all(),
+            'all_providers' => $providers->map(fn ($p) => [
+                'name' => $p->name,
+                'dashboard_url' => $p->billing_dashboard_url,
+                'is_active' => $p->is_active,
+            ])->values()->all(),
         ];
     }
 }

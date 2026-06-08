@@ -9,6 +9,20 @@ class AiProvider extends Model
 {
     protected $table = 'ai_providers';
 
+    public const BILLING_DASHBOARDS = [
+        'anthropic' => 'https://console.anthropic.com/settings/billing',
+        'openai'    => 'https://platform.openai.com/usage',
+        'xai'       => 'https://console.x.ai',
+        'google'    => 'https://console.cloud.google.com/billing',
+        'mistral'   => 'https://console.mistral.ai/billing',
+        'deepseek'  => 'https://platform.deepseek.com/usage',
+    ];
+
+    public function getBillingDashboardUrlAttribute(): ?string
+    {
+        return self::BILLING_DASHBOARDS[$this->slug] ?? null;
+    }
+
     protected $fillable = [
         'name',
         'slug',

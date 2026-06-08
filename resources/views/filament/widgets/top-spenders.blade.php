@@ -6,28 +6,28 @@
                 No billable activity in the last 30 days.
             </div>
         @else
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead class="border-b border-gray-200 dark:border-gray-700 text-left">
-                        <tr>
-                            <th class="py-2 pr-4 font-medium text-gray-700 dark:text-gray-300">User</th>
-                            <th class="py-2 pr-4 font-medium text-gray-700 dark:text-gray-300 text-right">Debits</th>
-                            <th class="py-2 pr-4 font-medium text-gray-700 dark:text-gray-300 text-right">Our cost</th>
-                            <th class="py-2 pr-4 font-medium text-gray-700 dark:text-gray-300 text-right">Billed</th>
-                            <th class="py-2 font-medium text-gray-700 dark:text-gray-300 text-right">Margin</th>
+            <div class="overflow-x-auto -mx-2">
+                <table style="width:100%;border-collapse:collapse;font-size:0.875rem">
+                    <thead>
+                        <tr style="border-bottom:1px solid rgb(229 231 235)">
+                            <th style="padding:8px 16px 8px 8px;text-align:left;font-weight:500;color:rgb(55 65 81);white-space:nowrap">User</th>
+                            <th style="padding:8px 16px 8px 8px;text-align:right;font-weight:500;color:rgb(55 65 81);white-space:nowrap">Debits</th>
+                            <th style="padding:8px 16px 8px 8px;text-align:right;font-weight:500;color:rgb(55 65 81);white-space:nowrap">Our cost</th>
+                            <th style="padding:8px 16px 8px 8px;text-align:right;font-weight:500;color:rgb(55 65 81);white-space:nowrap">Billed</th>
+                            <th style="padding:8px 8px;text-align:right;font-weight:500;color:rgb(55 65 81);white-space:nowrap">Margin</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                    <tbody>
                         @foreach ($rows as $row)
-                            <tr>
-                                <td class="py-2 pr-4">
-                                    <div class="text-gray-900 dark:text-gray-100">{{ $row['name'] }}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400">{{ $row['email'] }}</div>
+                            <tr style="border-bottom:1px solid rgb(243 244 246)">
+                                <td style="padding:8px 16px 8px 8px">
+                                    <div style="color:rgb(17 24 39)">{{ $row['name'] }}</div>
+                                    <div style="font-size:0.75rem;color:rgb(107 114 128)">{{ $row['email'] }}</div>
                                 </td>
-                                <td class="py-2 pr-4 text-gray-700 dark:text-gray-300 text-right tabular-nums">{{ number_format($row['debit_count']) }}</td>
-                                <td class="py-2 pr-4 text-amber-600 dark:text-amber-400 text-right tabular-nums">€{{ number_format($row['provider_cost'], 4) }}</td>
-                                <td class="py-2 pr-4 text-sky-600 dark:text-sky-400 text-right tabular-nums">€{{ number_format($row['user_cost'], 4) }}</td>
-                                <td class="py-2 text-right tabular-nums {{ $row['margin'] >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400' }}">€{{ number_format($row['margin'], 4) }}</td>
+                                <td style="padding:8px 16px 8px 8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:rgb(55 65 81)">{{ number_format($row['debit_count']) }}</td>
+                                <td style="padding:8px 16px 8px 8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:rgb(217 119 6)">&euro;{{ number_format($row['provider_cost'], 4) }}</td>
+                                <td style="padding:8px 16px 8px 8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:rgb(2 132 199)">&euro;{{ number_format($row['user_cost'], 4) }}</td>
+                                <td style="padding:8px 8px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;color:{{ $row['margin'] >= 0 ? 'rgb(5 150 105)' : 'rgb(225 29 72)' }}">&euro;{{ number_format($row['margin'], 4) }}</td>
                             </tr>
                         @endforeach
                     </tbody>

@@ -159,13 +159,13 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                         {walletEmpty ? (
                             // No funds → swap the send action for the top-up
                             // CTA so the user always knows the path out.
-                            <Link
+                            <a
                                 href={wallet.topup_url}
                                 className="flex h-8 items-center gap-1.5 rounded-full bg-rose-600 px-3 text-xs font-medium text-white shadow-soft transition-colors hover:bg-rose-500"
                             >
                                 <ArrowUpIcon className="h-3.5 w-3.5" />
                                 {t('input.topupBtn')}
-                            </Link>
+                            </a>
                         ) : (
                             <button
                                 onClick={submit}
