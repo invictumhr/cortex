@@ -4,6 +4,7 @@ namespace App\Services\Chat;
 
 use App\Events\ChatCostUpdated;
 use App\Events\ChatMessageCreated;
+use App\Events\PersonaIsTyping;
 use App\Models\Chat;
 use App\Models\ChatMessage;
 use App\Models\Persona;
@@ -67,6 +68,12 @@ class ChairService
             sourceId: $chat->id,
             metadata: ['role' => 'chair'],
         );
+
+        try {
+            broadcast(new PersonaIsTyping($chat->id, $chair->id, $chair->name, (int) $chat->current_round));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         try {
             $response = $this->factory->for($chair->aiModel)->sendMessage(

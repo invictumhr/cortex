@@ -32,7 +32,7 @@ class AiModelSeeder extends Seeder
 
             // ── xAI ─────────────────────────────────────────────────────
             ['provider' => 'xai', 'name' => 'Grok 4.3', 'model_string' => 'grok-4.3', 'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 1.25, 'out' => 2.50],
-            ['provider' => 'xai', 'name' => 'Grok 3',   'model_string' => 'grok-3',   'vision' => true, 'tools' => true, 'context' => 131000,  'in' => 3.00, 'out' => 15.00],
+            ['provider' => 'xai', 'name' => 'Grok 3',   'model_string' => 'grok-3',   'vision' => true, 'tools' => true, 'context' => 131000,  'in' => 1.25, 'out' => 2.50, 'active' => false],
 
             // ── Google ──────────────────────────────────────────────────
             ['provider' => 'google', 'name' => 'Gemini 3.5 Flash',     'model_string' => 'gemini-3.5-flash',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 1.50, 'out' => 9.00],
@@ -43,13 +43,13 @@ class AiModelSeeder extends Seeder
             // ── Mistral ─────────────────────────────────────────────────
             ['provider' => 'mistral', 'name' => 'Mistral Medium 3.5', 'model_string' => 'mistral-medium-latest', 'vision' => true, 'tools' => true, 'context' => 128000, 'in' => 1.50, 'out' => 7.50],
             ['provider' => 'mistral', 'name' => 'Mistral Large',      'model_string' => 'mistral-large-latest',  'vision' => true, 'tools' => true, 'context' => 128000, 'in' => 0.50, 'out' => 1.50],
-            ['provider' => 'mistral', 'name' => 'Mistral Small 4',    'model_string' => 'mistral-small-latest',  'vision' => true, 'tools' => true, 'context' => 128000, 'in' => 0.10, 'out' => 0.30],
+            ['provider' => 'mistral', 'name' => 'Mistral Small 4',    'model_string' => 'mistral-small-latest',  'vision' => true, 'tools' => true, 'context' => 128000, 'in' => 0.15, 'out' => 0.60],
 
             // ── DeepSeek ────────────────────────────────────────────────
             ['provider' => 'deepseek', 'name' => 'DeepSeek V4 Flash', 'model_string' => 'deepseek-v4-flash', 'vision' => false, 'tools' => true, 'context' => 1000000, 'in' => 0.14, 'out' => 0.28],
-            ['provider' => 'deepseek', 'name' => 'DeepSeek V4 Pro',   'model_string' => 'deepseek-v4-pro',   'vision' => false, 'tools' => true, 'context' => 1000000, 'in' => 0.44, 'out' => 0.87],
+            ['provider' => 'deepseek', 'name' => 'DeepSeek V4 Pro',   'model_string' => 'deepseek-v4-pro',   'vision' => false, 'tools' => true, 'context' => 1000000, 'in' => 0.435, 'out' => 0.87],
             // DeepSeek legacy — deprecated July 24 2026
-            ['provider' => 'deepseek', 'name' => 'DeepSeek V3', 'model_string' => 'deepseek-chat', 'vision' => false, 'tools' => true, 'context' => 64000, 'in' => 0.27, 'out' => 1.10, 'active' => false],
+            ['provider' => 'deepseek', 'name' => 'DeepSeek V3', 'model_string' => 'deepseek-chat', 'vision' => false, 'tools' => true, 'context' => 64000, 'in' => 0.14, 'out' => 0.28, 'active' => false],
         ];
 
         $providerIds = AiProvider::query()->pluck('id', 'slug');

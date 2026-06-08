@@ -4,6 +4,7 @@ namespace App\Services\Chat;
 
 use App\Events\ChatCostUpdated;
 use App\Events\ChatMessageCreated;
+use App\Events\PersonaIsTyping;
 use App\Events\ScribeSummarized;
 use App\Models\Chat;
 use App\Models\ChatMessage;
@@ -99,6 +100,12 @@ class ScribeService
         );
 
         $adapter = $this->factory->for($scribe->aiModel);
+
+        try {
+            broadcast(new PersonaIsTyping($chat->id, $scribe->id, $scribe->name, (int) $chat->current_round));
+        } catch (\Throwable $e) {
+            report($e);
+        }
 
         try {
             $response = $adapter->sendMessage(
@@ -214,13 +221,26 @@ class ScribeService
 
     /**
      * The scribe persona prompt plus a strict JSON output contract.
+     *
+     * Web GUI chats (continuous=true) get a human-readable prose summary so
+     * the chat feels natural; CLI and API chats keep the structured outline
+     * with section headers and priority matrix.
      */
     private function scribeSystemPrompt(Chat $chat, Persona $scribe, bool $final = false): string
     {
+        $isWebGui = (bool) $chat->continuous;
+
+        $summarySpec = $isWebGui
+            ? '"summary": "tečan, čitljiv narativni sažetak rasprave — piši tekst koji se prirodno čita kao izvještaj kolegi. '
+              .'Ne koristi naslove sekcija VELIKIM SLOVIMA, ne formatiraj kao listu, ne piši PRIORITETNU MATRICU u summary. '
+              .'Napiši glatku prozu koja pokriva ključne ideje, neslaganja, odluke i preporučene sljedeće korake."'
+            : '"summary": "strukturirani tekstualni sažetak prema tvom propisanom formatu '
+              .'(TEMA, KLJUČNE IDEJE, ODLUKE, NESLAGANJA, OTVORENA PITANJA, SLJEDEĆI KORACI, PRIORITETNA MATRICA)"';
+
         $prompt = trim((string) $scribe->system_prompt)
             ."\n\n--- IZLAZNI FORMAT ---\n"
             ."Vrati ISKLJUČIVO valjani JSON objekt (bez markdown ograda, bez teksta okolo) s točno ovim ključevima:\n"
-            .'{"summary": "strukturirani tekstualni sažetak prema tvom propisanom formatu (TEMA, KLJUČNE IDEJE, ODLUKE, NESLAGANJA, OTVORENA PITANJA, SLJEDEĆI KORACI, PRIORITETNA MATRICA)", '
+            .'{'.$summarySpec.', '
             .'"key_ideas": [{"idea": "sažeto formulirana ključna ideja", "contributing_personas": ["točno ime persone koja je ideju iznijela ili razvila"]}], '
             .'"key_decisions": ["donesena odluka"], '
             .'"open_questions": ["otvoreno pitanje"], '
@@ -230,16 +250,23 @@ class ScribeService
             .'"key_ideas" je niz objekata s ključevima "idea" (string) i "contributing_personas" '
             .'(niz točnih imena persona iz transkripta — oznaka [Ime] na početku svakog doprinosa); to '
             .'omogućuje kasniju analizu koja persona donosi vrijedne ideje. Ostali ključevi osim "summary" '
-            .'su nizovi stringova. Ako za neki ključ nema sadržaja, vrati prazan niz []. '
-            .'U dijelu PRIORITETNA MATRICA svrstaj svaku ključnu ideju u točno jedan kvadrant Impact x Effort: '
-            .'BRZE POBJEDE (velik učinak, malo truda), VELIKE OKLADE (velik učinak, puno truda), '
-            .'SPOREDNO (mali učinak, malo truda), PRESKOČITI (mali učinak, puno truda). '
-            .'Cijeli izlaz (summary i sve nizove) napiši na jeziku: '
+            .'su nizovi stringova. Ako za neki ključ nema sadržaja, vrati prazan niz []. ';
+
+        if (! $isWebGui) {
+            $prompt .= 'U dijelu PRIORITETNA MATRICA svrstaj svaku ključnu ideju u točno jedan kvadrant Impact x Effort: '
+                .'BRZE POBJEDE (velik učinak, malo truda), VELIKE OKLADE (velik učinak, puno truda), '
+                .'SPOREDNO (mali učinak, malo truda), PRESKOČITI (mali učinak, puno truda). ';
+        }
+
+        $prompt .= 'Cijeli izlaz (summary i sve nizove) napiši na jeziku: '
             .($chat->language ?: config('cortex.output_language', 'Croatian')).'.';
 
         if ($final) {
-            $prompt .= "\nOvo je ZAVRŠNA sinteza cijele rasprave. U dijelu ODLUKE unutar \"summary\" jasno navedi "
-                .'je li rasprava došla do konkretnog zaključka ili je ostala bez jasne konvergencije.';
+            $prompt .= $isWebGui
+                ? "\nOvo je ZAVRŠNA sinteza cijele rasprave. U sažetku jasno naznači "
+                  .'je li rasprava došla do konkretnog zaključka ili je ostala bez jasne konvergencije.'
+                : "\nOvo je ZAVRŠNA sinteza cijele rasprave. U dijelu ODLUKE unutar \"summary\" jasno navedi "
+                  .'je li rasprava došla do konkretnog zaključka ili je ostala bez jasne konvergencije.';
         }
 
         return $prompt;
