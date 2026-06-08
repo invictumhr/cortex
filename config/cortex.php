@@ -210,9 +210,8 @@ return [
     */
 
     'api_rate_limit' => [
-        'per_day' => (int) env('CORTEX_API_RATE_PER_DAY', 50),
-        'per_hour' => (int) env('CORTEX_API_RATE_PER_HOUR', 10),
-        'concurrent' => (int) env('CORTEX_API_RATE_CONCURRENT', 3),
+        'per_minute' => (int) env('CORTEX_API_RATE_PER_MINUTE', 10),
+        'per_hour' => (int) env('CORTEX_API_RATE_PER_HOUR', 50),
     ],
 
     /*

@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 /**
  * Bearer-token auth for the public REST API. Hashes the incoming token,
  * looks up the row, verifies it isn't revoked, checks the required scope,
- * enforces per-token rate limits (per-hour and per-day), and then logs the
+ * enforces per-token rate limits (per-minute and per-hour), and then logs the
  * user into the request context so downstream controllers see auth()->user().
  *
  * Usage:
@@ -44,23 +44,22 @@ class AuthenticateApiToken
             return response()->json(['error' => 'scope_required', 'required' => $requiredScope], 403);
         }
 
-        // Rate limits per token, separately for per-hour and per-day buckets.
-        // The day bucket has a 24h TTL so a burst doesn't quietly carry over.
-        $perHour = (int) config('cortex.api_rate_limit.per_hour', 10);
-        $perDay = (int) config('cortex.api_rate_limit.per_day', 50);
+        // Rate limits per token — two buckets: per-minute and per-hour.
+        $perMinute = (int) config('cortex.api_rate_limit.per_minute', 10);
+        $perHour = (int) config('cortex.api_rate_limit.per_hour', 50);
 
+        $minuteKey = "apitoken:minute:{$token->id}";
         $hourKey = "apitoken:hour:{$token->id}";
-        $dayKey = "apitoken:day:{$token->id}";
 
+        if (RateLimiter::tooManyAttempts($minuteKey, $perMinute)) {
+            return $this->limited($minuteKey, $perMinute, 'minute');
+        }
         if (RateLimiter::tooManyAttempts($hourKey, $perHour)) {
             return $this->limited($hourKey, $perHour, 'hour');
         }
-        if (RateLimiter::tooManyAttempts($dayKey, $perDay)) {
-            return $this->limited($dayKey, $perDay, 'day');
-        }
 
+        RateLimiter::hit($minuteKey, 60);
         RateLimiter::hit($hourKey, 3600);
-        RateLimiter::hit($dayKey, 86400);
 
         // Make $token available to downstream handlers (e.g. for stamping
         // chats with initiated_by_token_id) and authenticate the underlying

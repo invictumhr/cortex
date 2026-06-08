@@ -18,12 +18,13 @@
                 'title'  => 'Start a new boardroom',
                 'scope'  => 'cortex:discuss',
                 'icon'   => 'heroicon-o-play-circle',
-                'desc'   => 'Kick off a new discussion. Synchronous — returns the full chat with all messages produced by the run.',
+                'desc'   => 'Kick off a new discussion. Returns 202 immediately — the boardroom runs asynchronously. Poll GET /chats/{id} until status flips to "paused".',
                 'lead'   => 'The boardroom can be composed three ways (mutually exclusive — pick one, or omit all for <code class="mono-inline">agents: 5</code> default):',
                 'bullets' => [
                     '<strong>Quick</strong> — <code class="mono-inline">agents: N</code> — system picks N models + personas based on topic complexity',
                     '<strong>Custom models</strong> — <code class="mono-inline">models: ["gpt-4o", ...]</code> — you pick exact model strings; system picks personas',
                     '<strong>Custom</strong> — <code class="mono-inline">panel: [{persona, model}, ...]</code> — you pick everything; same persona can repeat with different models',
+                    'If <code class="mono-inline">title</code> is omitted, an AI-generated title is created automatically (prefixed with <code class="mono-inline">API:</code>)',
                 ],
                 'req' => <<<JSON
                 {
@@ -38,12 +39,11 @@
                 'res' => <<<JSON
                 {
                   "ok": true,
-                  "chat_id": 42,
-                  "status": "paused",
+                  "chat_id": "a3f7c2e9...64-char-sha256-hash...",
+                  "status": "active",
+                  "title": "API: SSR vs Hydration Trade-offs",
                   "rounds": 2,
-                  "messages": [ /* user + persona + scribe + chair */ ],
-                  "total_provider_cost_eur": 0.0312,
-                  "total_user_cost_eur": 0.0624
+                  "poll_url": "/api/v1/chats/a3f7c2e9..."
                 }
                 JSON,
             ],
@@ -65,12 +65,12 @@
             [
                 'method' => 'GET',
                 'path'   => '/api/v1/chats/{id}',
-                'title'  => 'Chat detail',
+                'title'  => 'Chat detail + poll for completion',
                 'scope'  => 'cortex:chats.read',
                 'icon'   => 'heroicon-o-eye',
-                'desc'   => 'Full chat with personas, messages, and scribe summaries.',
-                'lead'   => 'For long-polling clients streaming updates, pass <code class="mono-inline">messages_after=ID</code> to fetch only newer messages.',
-                'curl' => "curl \"{$base}/api/v1/chats/42?messages_after=100\" \\\n  -H \"Authorization: Bearer ctx_...\"",
+                'desc'   => 'Full chat with personas, messages, and scribe summaries. Use this to poll after POST /discuss or /messages — when chat.status changes from "active" to "paused", the turn is done.',
+                'lead'   => 'Pass <code class="mono-inline">messages_after=ID</code> to fetch only newer messages (incremental polling).',
+                'curl' => "curl \"{$base}/api/v1/chats/<sha256-hash>?messages_after=100\" \\\n  -H \"Authorization: Bearer ctx_...\"",
             ],
             [
                 'method' => 'POST',
@@ -78,8 +78,8 @@
                 'title'  => 'Follow-up turn',
                 'scope'  => 'cortex:chats.write',
                 'icon'   => 'heroicon-o-chat-bubble-left-right',
-                'desc'   => 'Drop a new user message into an existing chat.',
-                'lead'   => 'The boardroom runs synchronously; only the <strong>new</strong> messages from this turn come back in the response. Optional <code class="mono-inline">language</code> (ISO 639-1) re-aligns the chat\'s output language going forward.',
+                'desc'   => 'Drop a new user message into an existing chat. Returns 202 immediately — the boardroom runs asynchronously. Poll GET /chats/{id} for results.',
+                'lead'   => 'Optional <code class="mono-inline">language</code> (ISO 639-1) re-aligns the chat\'s output language going forward.',
                 'req' => <<<JSON
                 {
                   "content": "What's the biggest risk if we ship Monday?",
@@ -90,12 +90,10 @@
                 'res' => <<<JSON
                 {
                   "ok": true,
-                  "chat_id": 42,
-                  "status": "paused",
+                  "chat_id": "a3f7c2e9...sha256...",
+                  "status": "active",
                   "user_message_id": 188,
-                  "messages": [ /* only NEW messages from this turn */ ],
-                  "turn_provider_cost_eur": 0.0114,
-                  "turn_user_cost_eur": 0.0228
+                  "poll_url": "/api/v1/chats/a3f7c2e9..."
                 }
                 JSON,
             ],
@@ -107,7 +105,7 @@
                 'icon'   => 'heroicon-o-archive-box',
                 'desc'   => 'Hide the chat from default listings without deleting anything.',
                 'lead'   => 'Re-list with <code class="mono-inline">include_archived=1</code> on <code class="mono-inline">GET /chats</code>.',
-                'curl' => "curl -X POST {$base}/api/v1/chats/42/archive \\\n  -H \"Authorization: Bearer ctx_...\"",
+                'curl' => "curl -X POST {$base}/api/v1/chats/<chat-id>/archive \\\n  -H \"Authorization: Bearer ctx_...\"",
             ],
             [
                 'method' => 'DELETE',
@@ -117,7 +115,7 @@
                 'icon'   => 'heroicon-o-trash',
                 'desc'   => 'Permanently delete the chat and everything attached (messages, summaries, attachments, persona pivots).',
                 'lead'   => '<strong class="text-rose-600 dark:text-rose-400">Not reversible.</strong>',
-                'curl' => "curl -X DELETE {$base}/api/v1/chats/42 \\\n  -H \"Authorization: Bearer ctx_...\"",
+                'curl' => "curl -X DELETE {$base}/api/v1/chats/<chat-id> \\\n  -H \"Authorization: Bearer ctx_...\"",
             ],
             [
                 'method' => 'GET',
@@ -392,8 +390,8 @@
         <x-slot name="heading">Rate limits</x-slot>
 
         <ul class="cortex-doc-list text-sm text-gray-700 dark:text-gray-300 mb-3">
-            <li><strong>{{ config('cortex.api_rate_limit.per_hour', 10) }}</strong> requests per token per hour</li>
-            <li><strong>{{ config('cortex.api_rate_limit.per_day', 50) }}</strong> requests per token per day</li>
+            <li><strong>{{ config('cortex.api_rate_limit.per_minute', 10) }}</strong> requests per token per minute</li>
+            <li><strong>{{ config('cortex.api_rate_limit.per_hour', 50) }}</strong> requests per token per hour</li>
         </ul>
         <p class="text-sm text-gray-700 dark:text-gray-300 mb-3">
             Exceeding a limit returns <code class="mono-inline">429</code> with <code class="mono-inline">retry_after_seconds</code>
@@ -552,7 +550,8 @@
                             ['403', 'pill-red',    'Scope mismatch or cross-user chat',      '{"error": "scope_required", "required": "..."}'],
                             ['404', 'pill-gray',   'Chat does not exist or was deleted',     '{"message": "No query results..."}'],
                             ['422', 'pill-amber',  'Validation error',                       '{"errors": {"content": ["The content field is required."]}}'],
-                            ['429', 'pill-amber',  'Rate limit (hour or day cap)',           '{"error": "rate_limited", "retry_after_seconds": ...}'],
+                            ['202', 'pill-green',  'Accepted — discussion running async',    '{"ok": true, "chat_id": "...", "poll_url": "..."}'],
+                            ['429', 'pill-amber',  'Rate limit (minute or hour cap)',        '{"error": "rate_limited", "retry_after_seconds": ...}'],
                             ['500', 'pill-red',    'Unexpected server error',                '{"error": "<message>"}'],
                         ];
                     @endphp
@@ -574,8 +573,8 @@
 
         <ul class="cortex-doc-list text-sm text-gray-700 dark:text-gray-300 space-y-2">
             <li>
-                <strong>Synchronous calls take time.</strong>
-                A full boardroom can take 30–120 seconds. Set your HTTP client's timeout to <code class="mono-inline">180s</code> as a safe upper bound.
+                <strong>Async + poll.</strong>
+                POST /discuss and /messages return 202 immediately. Poll <code class="mono-inline">GET /chats/{id}</code> until <code class="mono-inline">status</code> flips from <code class="mono-inline">"active"</code> to <code class="mono-inline">"paused"</code>. Use <code class="mono-inline">messages_after=ID</code> for incremental fetches.
             </li>
             <li>
                 <strong>POST /discuss is not idempotent.</strong>
