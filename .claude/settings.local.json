@@ -19,7 +19,8 @@
       "mcp__Claude_in_Chrome__read_console_messages",
       "mcp__Claude_in_Chrome__navigate",
       "Bash(ls D:/laragon/www/)",
-      "PowerShell(cortex \"REZULTAT IZVLACENJA: kombinacija A pogodila 2 glavna \\(34, 35\\) + 2 euro \\(3, 5\\) = DOBITAK kategorija 8 \\(~15-25 EUR\\). Kombinacija B: 0+0. Kombinacija C: 1 glavni \\(46\\) + 0 euro. Kombinacija D: 0+0. PITANJA ZA PANEL: 1\\) Marco - frekvencijski pristup dao jedini dobitak, slucajnost ili signal? 2\\) Viktor - drzis li i dalje stav da su sva odstupanja unutar suma? 3\\) Helena - popular-avoidance C dotakla samo 46, sto govori o hipotezi? 4\\) Ada - D potpuno promasila, regresija prema sredini nije radila - tvoja revizija? 5\\) Realist - kako bi koristio jackpot podjele kao proxy ako provjerimo broj dobitnika u kategoriji 5+2? DAJTE REVIDIRANI SAZETAK: sto biste promijenili u portfelju za sljedece izvlacenje na temelju ovog jednog empirijskog uzorka \\(uz svijest da je 1 uzorak metodoloski nedovoljan\\)?\" -Chat 74 -Rounds 3 -Language hr)"
+      "PowerShell(cortex \"REZULTAT IZVLACENJA: kombinacija A pogodila 2 glavna \\(34, 35\\) + 2 euro \\(3, 5\\) = DOBITAK kategorija 8 \\(~15-25 EUR\\). Kombinacija B: 0+0. Kombinacija C: 1 glavni \\(46\\) + 0 euro. Kombinacija D: 0+0. PITANJA ZA PANEL: 1\\) Marco - frekvencijski pristup dao jedini dobitak, slucajnost ili signal? 2\\) Viktor - drzis li i dalje stav da su sva odstupanja unutar suma? 3\\) Helena - popular-avoidance C dotakla samo 46, sto govori o hipotezi? 4\\) Ada - D potpuno promasila, regresija prema sredini nije radila - tvoja revizija? 5\\) Realist - kako bi koristio jackpot podjele kao proxy ako provjerimo broj dobitnika u kategoriji 5+2? DAJTE REVIDIRANI SAZETAK: sto biste promijenili u portfelju za sljedece izvlacenje na temelju ovog jednog empirijskog uzorka \\(uz svijest da je 1 uzorak metodoloski nedovoljan\\)?\" -Chat 74 -Rounds 3 -Language hr)",
+      "Bash(python -m json.tool)"
     ]
   }
 }

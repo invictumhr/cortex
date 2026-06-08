@@ -26,15 +26,17 @@ Route::prefix('v1')->group(function () {
         ->name('api.v1.discuss');
 
     // ---- Chats CRUD (read scope for listing, write scope for mutations) -----
+    // API routes bind by public_id (SHA-256 hash) so sequential numeric IDs
+    // are never exposed — prevents enumeration even if ownership checks pass.
     Route::middleware('api.token:'.ApiToken::SCOPE_CHATS_READ)->group(function () {
         Route::get('/chats', [ChatsController::class, 'index'])->name('api.v1.chats.index');
-        Route::get('/chats/{chat}', [ChatsController::class, 'show'])->name('api.v1.chats.show');
+        Route::get('/chats/{chat:public_id}', [ChatsController::class, 'show'])->name('api.v1.chats.show');
     });
 
     Route::middleware('api.token:'.ApiToken::SCOPE_CHATS_WRITE)->group(function () {
-        Route::post('/chats/{chat}/messages', [ChatsController::class, 'storeMessage'])->name('api.v1.chats.messages');
-        Route::post('/chats/{chat}/archive', [ChatsController::class, 'archive'])->name('api.v1.chats.archive');
-        Route::delete('/chats/{chat}', [ChatsController::class, 'destroy'])->name('api.v1.chats.destroy');
+        Route::post('/chats/{chat:public_id}/messages', [ChatsController::class, 'storeMessage'])->name('api.v1.chats.messages');
+        Route::post('/chats/{chat:public_id}/archive', [ChatsController::class, 'archive'])->name('api.v1.chats.archive');
+        Route::delete('/chats/{chat:public_id}', [ChatsController::class, 'destroy'])->name('api.v1.chats.destroy');
     });
 
     // ---- Wallet (read-only — top-ups & debits happen elsewhere) -------------

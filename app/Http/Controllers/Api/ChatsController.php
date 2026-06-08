@@ -22,6 +22,8 @@ use Throwable;
  *
  * All routes are scoped to the token user (no cross-user visibility) and
  * write a row to api_token_usages per request via LogsApiUsage.
+ *
+ * Routes bind by {chat:public_id} — sequential numeric IDs are never exposed.
  */
 class ChatsController extends Controller
 {
@@ -64,25 +66,44 @@ class ChatsController extends Controller
         }
 
         $chats = $query->limit($limit)->get([
-            'id', 'title', 'status', 'init_mode', 'language',
+            'id', 'public_id', 'title', 'status', 'init_mode', 'language',
             'total_messages', 'total_cost', 'current_round',
             'continuous', 'created_at', 'updated_at',
         ]);
 
+        // Map public_id to the "id" field in the response — callers never see
+        // the numeric id.
+        $mapped = $chats->map(fn (Chat $c) => [
+            'id' => $c->public_id,
+            'title' => $c->title,
+            'status' => $c->status,
+            'init_mode' => $c->init_mode,
+            'language' => $c->language,
+            'total_messages' => $c->total_messages,
+            'total_cost' => $c->total_cost,
+            'current_round' => $c->current_round,
+            'continuous' => $c->continuous,
+            'created_at' => $c->created_at,
+            'updated_at' => $c->updated_at,
+        ]);
+
         return $this->logUsage($token, 'GET /api/v1/chats', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
-                'chats' => $chats,
+                'chats' => $mapped,
                 'next_before' => $chats->last()?->updated_at?->toIso8601String(),
             ])
         );
     }
 
     /**
-     * GET /api/v1/chats/{chat}
+     * GET /api/v1/chats/{chat:public_id}
      *
      * Single chat with its messages, scribe summaries, and personas.
-     * `?messages_after=ID` returns only newer messages for streaming clients
-     * polling for updates without re-downloading the whole transcript.
+     * `?messages_after=ID` returns only newer messages for polling clients
+     * without re-downloading the whole transcript.
+     *
+     * Polling pattern: call this endpoint until `chat.status` flips from
+     * "active" to "paused" — that means the turn is done.
      */
     public function show(Request $request, Chat $chat): JsonResponse
     {
@@ -115,13 +136,25 @@ class ChatsController extends Controller
 
         return $this->logUsage($token, 'GET /api/v1/chats/{id}', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
-                'chat' => $chat->only([
-                    'id', 'title', 'description', 'context', 'constraints',
-                    'status', 'init_mode', 'language',
-                    'current_round', 'rounds_per_turn', 'continuous',
-                    'total_messages', 'total_input_tokens', 'total_output_tokens',
-                    'total_cost', 'created_at', 'updated_at',
-                ]),
+                'chat' => [
+                    'id' => $chat->public_id,
+                    'title' => $chat->title,
+                    'description' => $chat->description,
+                    'context' => $chat->context,
+                    'constraints' => $chat->constraints,
+                    'status' => $chat->status,
+                    'init_mode' => $chat->init_mode,
+                    'language' => $chat->language,
+                    'current_round' => $chat->current_round,
+                    'rounds_per_turn' => $chat->rounds_per_turn,
+                    'continuous' => $chat->continuous,
+                    'total_messages' => $chat->total_messages,
+                    'total_input_tokens' => $chat->total_input_tokens,
+                    'total_output_tokens' => $chat->total_output_tokens,
+                    'total_cost' => $chat->total_cost,
+                    'created_at' => $chat->created_at,
+                    'updated_at' => $chat->updated_at,
+                ],
                 'personas' => $chat->personas()
                     ->with('aiModel:id,name,model_string')
                     ->get(['personas.id', 'slug', 'name', 'title', 'avatar_emoji', 'avatar_color', 'is_scribe', 'is_chair']),
@@ -133,19 +166,14 @@ class ChatsController extends Controller
     }
 
     /**
-     * POST /api/v1/chats/{chat}/messages
+     * POST /api/v1/chats/{chat:public_id}/messages
      *
-     * Drop a follow-up message into an existing chat. Forces sync queue +
-     * log broadcasting (same trick as DiscussController) so the whole turn
-     * runs inside this HTTP call and we return the new messages in the body.
+     * Drop a follow-up message into an existing chat. The discussion runs
+     * asynchronously on the queue — returns 202 immediately. Poll
+     * GET /chats/{public_id} for the resulting messages.
      */
     public function storeMessage(Request $request, Chat $chat): JsonResponse
     {
-        // Sync queue → the orchestrator chain runs inline and we wait for it.
-        // Reverb is replaced with the log driver so we don't try to push to a
-        // websocket from inside an HTTP request.
-        config(['queue.default' => 'sync', 'broadcasting.default' => 'log']);
-
         $started = microtime(true);
         $token = $this->token($request);
         $user = $token->user;
@@ -173,9 +201,8 @@ class ChatsController extends Controller
             $chat->update(['rounds_per_turn' => (int) $validated['rounds']]);
         }
 
-        // Pre-flight balance gate — same logic as the web controller. We don't
-        // estimate the whole turn, just refuse if the user has no spendable
-        // euros at all so the orchestrator doesn't get partway and bail.
+        // Pre-flight balance gate — refuse if the user has no spendable euros
+        // at all so the orchestrator doesn't get partway and bail.
         $wallet = $this->wallets->forUser($user);
         $minFloor = (float) config('cortex.billing.min_send_balance', 0.05);
         if ($wallet->availableBalance() < $minFloor) {
@@ -192,6 +219,8 @@ class ChatsController extends Controller
         $lastIdBefore = (int) $chat->messages()->max('id');
 
         try {
+            // Dispatch to the real queue — returns immediately after creating
+            // the user message and kicking off the first persona job.
             $userMessage = $this->orchestrator->sendUserMessage($chat, $user, $validated['content']);
         } catch (InsufficientFundsException $e) {
             return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
@@ -211,46 +240,21 @@ class ChatsController extends Controller
             );
         }
 
-        $chat->refresh();
-
-        // Roll up just the messages produced by THIS turn (id > lastIdBefore)
-        // so the caller sees only the new traffic and the usage row reflects
-        // the cost of this specific call rather than the chat lifetime.
-        $newMessages = $chat->messages()
-            ->where('id', '>', $lastIdBefore)
-            ->orderBy('id')
-            ->get([
-                'id', 'persona_id', 'role', 'round_number', 'content',
-                'is_billable', 'provider_cost', 'user_cost', 'model_used',
-                'finish_reason', 'created_at',
-            ]);
-
-        $providerCost = (float) $newMessages->sum('provider_cost');
-        $userCost = (float) $newMessages->sum('user_cost');
-
         return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
                 'ok' => true,
-                'chat_id' => $chat->id,
+                'chat_id' => $chat->public_id,
                 'status' => $chat->status,
                 'user_message_id' => $userMessage->id,
-                'messages' => $newMessages,
-                'turn_provider_cost_eur' => round($providerCost, 6),
-                'turn_user_cost_eur' => round($userCost, 6),
-            ]),
+                'poll_url' => '/api/v1/chats/'.$chat->public_id,
+            ], 202),
             chatId: $chat->id,
             chatMessageId: $userMessage->id,
-            providerCost: $providerCost,
-            userCost: $userCost,
         );
     }
 
     /**
-     * POST /api/v1/chats/{chat}/archive
-     *
-     * Soft-archive: status → archived, no data loss. Mirrors the web archive
-     * route so a client can hide chats from the active list without losing
-     * the transcript.
+     * POST /api/v1/chats/{chat:public_id}/archive
      */
     public function archive(Request $request, Chat $chat): JsonResponse
     {
@@ -271,11 +275,7 @@ class ChatsController extends Controller
     }
 
     /**
-     * DELETE /api/v1/chats/{chat}
-     *
-     * Hard delete with FK cascade — messages, scribe summaries, attachments
-     * and pivot rows all go. This is destructive; clients should confirm
-     * before calling it.
+     * DELETE /api/v1/chats/{chat:public_id}
      */
     public function destroy(Request $request, Chat $chat): JsonResponse
     {
@@ -288,13 +288,11 @@ class ChatsController extends Controller
                 response()->json(['error' => 'forbidden'], 403), chatId: $chatId);
         }
 
+        $publicId = $chat->public_id;
         $chat->delete();
 
-        // chat_id on the usage row would FK-fail if we passed the now-deleted
-        // id, so we leave it null here and let the endpoint string identify
-        // what was hit. The deleted_chat_id sits in metadata via response only.
         return $this->logUsage($token, 'DELETE /api/v1/chats/{id}', ApiTokenUsage::STATUS_OK, $started,
-            response()->json(['ok' => true, 'deleted_chat_id' => $chatId]),
+            response()->json(['ok' => true, 'deleted_chat_id' => $publicId]),
         );
     }
 

@@ -10,18 +10,18 @@ use App\Models\ApiToken;
 use App\Models\ApiTokenUsage;
 use App\Models\Chat;
 use App\Models\Persona;
+use App\Services\Billing\WalletService;
 use App\Services\Chat\ChatOrchestrator;
 use App\Services\Chat\CostEstimator;
+use App\Services\Chat\TitleGenerator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
 
 /**
- * Public API endpoint: kick off a boardroom discussion, return the chat row.
- * Authenticated via api.token middleware (cortex:discuss scope required).
- *
- * The chat runs through the same orchestrator as the CLI/web — wallet
- * reserves/debits happen per persona inside PersonaResponder.
+ * Public API endpoint: kick off a boardroom discussion asynchronously.
+ * Returns 202 Accepted with the chat's public_id immediately — the caller
+ * polls GET /api/v1/chats/{public_id} for progress and results.
  *
  * POST /api/v1/discuss
  *   { "topic": "...", "personas": ["marco","luna"], "rounds": 2, "title": "..." }
@@ -34,13 +34,9 @@ class DiscussController extends Controller
         Request $request,
         ChatOrchestrator $orchestrator,
         CostEstimator $estimator,
+        WalletService $wallets,
+        TitleGenerator $titleGenerator,
     ): JsonResponse {
-        // V1: run the boardroom synchronously so callers get the full result
-        // in the response. Async + webhook can come in V2 — for now this
-        // mirrors the CLI behavior. Same broadcasting trick: drop Reverb so
-        // the loop doesn't try to hit a WebSocket server during an HTTP call.
-        config(['queue.default' => 'sync', 'broadcasting.default' => 'log']);
-
         $started = microtime(true);
         $token = $request->attributes->get('api_token');
         \assert($token instanceof ApiToken);
@@ -72,14 +68,34 @@ class DiscussController extends Controller
 
         $rounds = (int) ($validated['rounds'] ?? 2);
 
+        // Pre-flight balance check — refuse immediately if the wallet is
+        // below the minimum so we don't create an empty chat and then fail
+        // inside the queued job where the caller can't see the error.
+        $wallet = $wallets->forUser($user);
+        $minFloor = (float) config('cortex.billing.min_send_balance', 0.05);
+        if ($wallet->availableBalance() < $minFloor) {
+            return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
+                response()->json([
+                    'error' => 'insufficient_funds',
+                    'available_eur' => round($wallet->availableBalance(), 6),
+                    'min_send_eur' => $minFloor,
+                ], 402));
+        }
+
         // Resolve init mode from the request body — same precedence the CLI
         // uses: panel > models > agents > personas > default quick.
         [$initMode, $panelConfig] = $this->resolveInitMode($validated);
 
+        // Auto-generate title from topic when the caller didn't provide one.
+        $title = $validated['title'] ?? null;
+        if (empty($title)) {
+            $title = $titleGenerator->generate($validated['topic'], 'API');
+        }
+
         try {
             $chat = $user->chats()->create([
                 'initiated_by_token_id' => $token->id,
-                'title' => $validated['title'] ?? 'API discussion',
+                'title' => $title ?: 'API discussion',
                 'context' => $validated['context'] ?? null,
                 'constraints' => $validated['constraints'] ?? null,
                 'init_mode' => $initMode,
@@ -99,6 +115,10 @@ class DiscussController extends Controller
                 }
             }
 
+            // Dispatch the discussion to the real queue — returns immediately.
+            // The queue worker processes persona responses, scribe, and chair
+            // in the background. The caller polls GET /chats/{public_id} for
+            // progress (status flips to 'paused' when the turn is done).
             $orchestrator->sendUserMessage($chat, $user, $validated['topic']);
         } catch (InsufficientFundsException $e) {
             return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
@@ -114,33 +134,16 @@ class DiscussController extends Controller
                 response()->json(['error' => $e->getMessage()], 500));
         }
 
-        $chat->refresh();
-
-        // Per-call usage log so the user dashboard can show "this token cost
-        // me €X today". user_cost reads off the chat's debit roll-up.
-        $userCost = (float) $chat->messages()->sum('user_cost');
-        $providerCost = (float) $chat->messages()->sum('provider_cost');
-
-        return $this->logUsage(
-            $token,
-            'POST /api/v1/discuss',
-            ApiTokenUsage::STATUS_OK,
-            $started,
+        return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
                 'ok' => true,
-                'chat_id' => $chat->id,
+                'chat_id' => $chat->public_id,
                 'status' => $chat->status,
+                'title' => $chat->title,
                 'rounds' => (int) $chat->rounds_per_turn,
-                'messages' => $chat->messages()->where('id', '>', 0)->orderBy('id')->get([
-                    'id', 'role', 'persona_id', 'round_number', 'content',
-                    'is_billable', 'provider_cost', 'user_cost', 'model_used',
-                ]),
-                'total_provider_cost_eur' => round($providerCost, 6),
-                'total_user_cost_eur' => round($userCost, 6),
-            ]),
+                'poll_url' => '/api/v1/chats/'.$chat->public_id,
+            ], 202),
             chatId: $chat->id,
-            providerCost: $providerCost,
-            userCost: $userCost,
         );
     }
 
@@ -233,5 +236,4 @@ class DiscussController extends Controller
             ]);
         }
     }
-
 }

@@ -6,13 +6,11 @@ use App\Models\AiModel;
 use App\Models\Chat;
 use App\Models\Persona;
 use App\Models\PowerShellPermission;
-use App\Services\Ai\AiProviderFactory;
-use App\Services\Ai\Data\AiMessage;
+use App\Services\Chat\TitleGenerator;
 use App\Services\LanguageDetector;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -103,7 +101,7 @@ class ChatController extends Controller
         // provide one. Uses the cheap router model — platform cost, not billed.
         $title = $validated['title'];
         if (empty($title) && filled($validated['description'] ?? null)) {
-            $title = $this->generateTitle($validated['description']);
+            $title = app(TitleGenerator::class)->generate($validated['description']);
         }
 
         $chat = $request->user()->chats()->create([
@@ -195,38 +193,4 @@ class ChatController extends Controller
             ->values();
     }
 
-    /**
-     * Generate a short chat title from the user's topic description using the
-     * cheapest available model (router_model config). Returns null on failure
-     * so the caller falls back to the default title.
-     */
-    private function generateTitle(string $description): ?string
-    {
-        try {
-            $model = AiModel::where('model_string', config('cortex.router_model'))
-                ->whereHas('provider', fn ($q) => $q->whereNotNull('api_key'))
-                ->with('provider')
-                ->first();
-
-            if (! $model) {
-                return null;
-            }
-
-            $response = app(AiProviderFactory::class)->for($model)->sendMessage(
-                'Generate a short, catchy title (max 50 characters) for a boardroom discussion. '
-                .'Return ONLY the title text, nothing else. No quotes, no prefix, no explanation. '
-                .'Write in the same language as the topic.',
-                [AiMessage::user($description)],
-                ['max_tokens' => 40, 'temperature' => 0.5],
-            );
-
-            $title = trim($response->content, " \t\n\r\0\x0B\"'");
-
-            return $title !== '' ? Str::limit($title, 255, '') : null;
-        } catch (\Throwable $e) {
-            report($e);
-
-            return null;
-        }
-    }
 }

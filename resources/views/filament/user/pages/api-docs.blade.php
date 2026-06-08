@@ -444,8 +444,6 @@
                         <th class="cortex-th">Model</th>
                         <th class="cortex-th" style="white-space: nowrap;">Model ID</th>
                         <th class="cortex-th" style="text-align: right;">Context</th>
-                        <th class="cortex-th" style="text-align: right; white-space: nowrap;">Input $/1M</th>
-                        <th class="cortex-th" style="text-align: right; white-space: nowrap;">Output $/1M</th>
                         <th class="cortex-th" style="text-align: center;">Vision</th>
                     </tr>
                 </thead>
@@ -461,8 +459,6 @@
                                 <td class="cortex-td" style="font-weight: 500;">{{ $m->name }}</td>
                                 <td class="cortex-td cortex-td-mono">{{ $m->model_string }}</td>
                                 <td class="cortex-td" style="text-align: right; white-space: nowrap;">{{ $formatCtx($m->max_context_tokens) }}</td>
-                                <td class="cortex-td cortex-td-mono" style="text-align: right;">${{ number_format($m->input_cost_per_1m_tokens, 2) }}</td>
-                                <td class="cortex-td cortex-td-mono" style="text-align: right;">${{ number_format($m->output_cost_per_1m_tokens, 2) }}</td>
                                 <td class="cortex-td" style="text-align: center;">
                                     @if ($m->supports_vision)
                                         <span style="color: rgb(34 197 94);">&#10003;</span>
@@ -478,7 +474,6 @@
         </div>
 
         <p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
-            Prices are approximate provider rates in USD per 1 million tokens.
             Your wallet is debited in EUR at provider cost &times; your margin tier ({{ config('cortex.billing.margin_hobby') }}&times; hobby / {{ config('cortex.billing.margin_enterprise') }}&times; enterprise).
         </p>
     </x-filament::section>

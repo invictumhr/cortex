@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class Chat extends Model
 {
@@ -22,6 +23,7 @@ class Chat extends Model
     protected $fillable = [
         'user_id',
         'initiated_by_token_id',
+        'public_id',
         'title',
         'description',
         'context',
@@ -42,6 +44,13 @@ class Chat extends Model
         'last_scribe_summary_at',
         'scribe_interval',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Chat $chat) {
+            $chat->public_id ??= hash('sha256', Str::random(40));
+        });
+    }
 
     protected function casts(): array
     {

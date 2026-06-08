@@ -143,14 +143,14 @@ Plus instant `sendBeacon` na `chats/{id}/leave`. Eksplicitna pauza pokreće
 - API ključevi u `.env` s **`CORTEX_` prefiksom** (izbjegava koliziju s ambient
   praznim `ANTHROPIC_API_KEY`); seedani u `ai_providers.api_key`, kriptirani
   (`encrypted` cast).
-- **Gotchas po modelu:** Opus 4.7 odbija `temperature` (AnthropicAdapter ga
-  preskače za `claude-opus-4-7`); Gemini Flash troši izlaz na "thinking" →
+- **Gotchas po modelu:** Opus 4.7+ odbija `temperature` (AnthropicAdapter ga
+  preskače za `claude-opus-4-[7-9]*`); Gemini Flash troši izlaz na "thinking" →
   adapter šalje `thinkingConfig.thinkingBudget=0`; OpenAI o-serija koristi
   `max_completion_tokens` i bez temperature.
 
 ## Persone
 
-- ~30 fiksnih persona (`database/seeders/PersonaSeeder.php`): slug, name, title,
+- 32 fiksne persone (`database/seeders/PersonaSeeder.php`): 30 debate + Scribe + Chair. slug, name, title,
   `system_prompt`, `expertise_areas`, `ai_model_id`. Mapiranje persona→model je
   u **`PersonaModelSeeder`** (autoritativan, override-a PersonaSeeder).
 - Zastavice na `personas`: `is_scribe` (Scribe — sažima, ne glasa), `is_chair`
@@ -209,7 +209,7 @@ true SAMO ako `output_tokens > 0 AND finish_reason ∉ ['content_filter', 'safet
 Sve drugo (prazan stream, refusal) → `release()` umjesto `commitDebit()`.
 
 **Free credit logika** (Opcija B iz design-a):
-1. Registracija → `Registered` event → user kreiran s IP/UA hash (BrowserController)
+1. Registracija → `Registered` event → user kreiran s IP/UA hash (RegisteredUserController)
 2. Email verified → `Verified` event → `GrantSignupCredit` listener:
    - Anti-farming: ako 3+ regs sa istim `registration_ip_hash` u zadnjih 7 dana →
      soft deny (stamp `free_credit_granted_at`, no grant)
@@ -384,6 +384,10 @@ Navigation grupe: **Account** / **Billing** / **Developers**.
   - `DeleteAccount` — password + literal "DELETE" confirmation + modal "This
     cannot be undone", cascade-delete preko FK
   - `RedeemCode` — 14-digit PIN input s dash-tolerant parsing
+  - `ApiDocs` — self-serve REST API reference; Blade view s live base URL i
+    scope listom iz `ApiToken` konstanti. Nav group Developers, sort=2.
+  - `AgentBriefing` — generira downloadable CLAUDE.md za AI agente s punim API
+    ugovorom (endpoints, auth, scopes, rate limits). Nav group Developers, sort=3.
 - **Resources** (`app/Filament/User/Resources/`):
   - `WalletTransactionResource` (read-only ledger, scopes na user-ov wallet,
     filter po type)

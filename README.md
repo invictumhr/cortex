@@ -18,7 +18,7 @@ You ask Cortex a hard, open-ended question. Five AI personas — each running on
 
 Unlike most "multi-agent" frameworks where the same model talks to itself in different costumes, Cortex's personas are genuinely distinct minds — different architectures, different training data, different failure modes — coming at the same problem from different angles.
 
-It's a personal-scale, self-hosted tool: one user, runs locally, you pay your own API costs.
+It's a prepaid SaaS: users register, verify email, top up via SMS PIN codes, and pay per-token from their wallet. Self-hostable.
 
 ## Why?
 
@@ -95,7 +95,7 @@ FIRST STEP: This week, identify the 3 highest-friction module boundaries and blo
 - **Redis** (queue + cache + heartbeat keys)
 - **Laravel Reverb** (WebSocket live stream of personas as they respond)
 - **Inertia + React (JSX) + Tailwind** (web UI)
-- **Filament 5.6** (admin panel for personas, models, providers)
+- **Filament 5.6** — two panels: `/admin` (super-admin) and `/user` (customer: wallet, API tokens, profile)
 - **6 AI provider adapters**: Anthropic, OpenAI, xAI, Google Gemini, Mistral, DeepSeek
 
 ## Quick start
@@ -281,9 +281,43 @@ In `config/cortex.php`:
 | `fallback_model` | gpt-4o-mini | Used if a persona's primary model fails |
 | `flagship_models` | per-provider | Used by `--strong` mode |
 | `architect_model` | claude-sonnet-4-6 | Designs question-specific roles |
-| `output_language` | Croatian | Default language for scribe/Chair (per-chat auto-detected) |
+| `output_language` | English | Default language for scribe/Chair (per-chat overridable) |
+| `billing.margin_hobby` | 2.0 | User cost multiplier (hobby tier) |
+| `billing.margin_enterprise` | 1.7 | User cost multiplier (enterprise tier) |
+| `billing.free_credit_signup` | 0.50 | EUR granted on email verification |
+| `billing.min_send_balance` | 0.05 | Minimum wallet balance to send a message (HTTP 402 below) |
+| `billing.low_balance_warning` | 0.50 | Threshold for UI balance warning banner |
+| `api_rate_limit.per_day` | 50 | API requests per token per day |
+| `api_rate_limit.per_hour` | 10 | API requests per token per hour |
 
 All overridable via `CORTEX_*` env variables.
+
+## Billing & Wallet
+
+Users prepay via SMS PIN codes (14-digit, generated in batches by admin). All balance mutations go through `WalletService` with atomic `SELECT ... FOR UPDATE` and an append-only ledger (`wallet_transactions`).
+
+- **Signup** → email verification → €0.50 free credit grant
+- **First deposit** ≥ €5 → automatic €1.00 bonus
+- Every persona response, scribe summary, and Chair decision does a **reserve → call → commitDebit** cycle through the wallet
+- Margin: 2.0× (hobby) or 1.7× (enterprise, if 30-day spend ≥ €100)
+- Daily reconciliation command (`cortex:wallet-reconcile`) checks ledger invariants
+
+## REST API
+
+Eight endpoints behind Bearer token auth (`ctx_...` tokens, managed in `/user/api-tokens`). Per-token rate limits (50/day, 10/hour).
+
+| Method | Path | Scope | Action |
+|---|---|---|---|
+| POST | `/api/v1/discuss` | `cortex:discuss` | Start a new boardroom |
+| GET | `/api/v1/chats` | `cortex:chats.read` | List chats |
+| GET | `/api/v1/chats/{id}` | `cortex:chats.read` | Full chat with messages |
+| POST | `/api/v1/chats/{id}/messages` | `cortex:chats.write` | Follow-up message |
+| POST | `/api/v1/chats/{id}/archive` | `cortex:chats.write` | Archive a chat |
+| DELETE | `/api/v1/chats/{id}` | `cortex:chats.write` | Hard delete |
+| GET | `/api/v1/wallet` | `cortex:wallet.read` | Balance, tier, spend |
+| GET | `/api/v1/wallet/transactions` | `cortex:wallet.read` | Ledger pagination |
+
+Status codes: `200` ok · `401` invalid token · `402` insufficient funds · `403` wrong scope or cross-user · `422` validation · `429` rate limited.
 
 ## Project structure
 
@@ -292,28 +326,33 @@ app/
   Services/
     Chat/                      ← orchestrator, personas, scribe, Chair, architect
     Ai/                        ← provider adapters
-    LanguageDetector.php       ← HR/EN auto-detection
+    Billing/                   ← WalletService, TopupCodeService
+    LanguageDetector.php       ← 23-language ISO 639-1 mapping
   Jobs/
     GeneratePersonaResponse.php   ← per-persona, self-chaining
     ConcludeDiscussion.php        ← scribe-final + Chair on pause
-  Models/                      ← Chat, ChatMessage, Persona, ScribeSummary, ...
-  Console/Commands/            ← cortex:discuss, cortex:benchmark, ...
+  Models/                      ← Chat, ChatMessage, Persona, Wallet, ApiToken, ...
+  Http/Controllers/Api/        ← REST API (discuss, chats, wallet)
+  Filament/
+    Resources/                 ← admin panel resources
+    User/                      ← customer panel (profile, wallet, API tokens, redeem)
+  Console/Commands/            ← cortex:discuss, cortex:benchmark, cortex:wallet-reconcile, ...
 resources/js/
   Pages/Chats/                 ← Inertia pages (Index, Show)
-  Components/Cortex/           ← MessageBubble, ChatInputBar, PersonaInfoPanel, ...
+  Components/Cortex/           ← MessageBubble, ChatInputBar, BalanceBanner, ...
   i18n/                        ← UI translations HR/EN
 benchmark/                     ← 30-question reference suite + runner + results
 database/
   migrations/
-  seeders/                     ← PersonaSeeder (29 personas), PersonaModelSeeder
+  seeders/                     ← PersonaSeeder (32 personas incl. Scribe + Chair), PersonaModelSeeder
 config/cortex.php              ← all knobs
 bin/cortex.ps1                 ← PowerShell wrapper for cortex:discuss
 ```
 
 ## Things to know
 
-- **Personal-scale tool.** Single user, no auth/billing/multi-tenancy. Designed to live on your laptop or a private box.
-- **Cost is real.** A 5-persona × 2-round discussion costs roughly €0.10–€0.40 depending on model selection. Budget guard auto-pauses at the per-chat limit.
+- **Multi-user SaaS.** Registration with email verification, per-user wallets, SMS PIN top-ups, API tokens. Admin and customer Filament panels.
+- **Cost is real.** A 5-persona × 2-round discussion costs roughly €0.10–€0.40 in provider costs (user cost includes a tier-based margin: 2.0× hobby, 1.7× enterprise). Budget guard auto-pauses at the per-chat limit.
 - **Continuous web mode auto-stops.** The chat page heartbeats every ~20 s; the moment you leave (close tab, navigate away), the next round-check pauses the discussion. Nothing ever burns money in the background.
 - **CLI vs Web differ.** CLI uses `--rounds=N` (bounded). Web is continuous (no round count — you pause when done).
 - **Multilingual.** UI toggle (HR/EN). Discussion language is set explicitly — UI toggle on web, `--language=<iso>` on CLI. CLI supports 23 ISO 639-1 codes (en, hr, sr, bs, sl, sk, cs, pl, bg, ru, uk, de, fr, it, es, pt, nl, ro, hu, sv, el, da, fi).
@@ -331,7 +370,7 @@ This is a personal tool that happens to be open-sourced. Issues and PRs are welc
 
 Cortex is built and maintained by **[Invictum](https://invictum.hr)** — a small software studio from Požega, Croatia.
 
-Stack we use daily: Laravel 11, PHP 8.3, WordPress, Alpine + Tailwind, Astro / Next, GSAP, Percona MySQL, PostgreSQL, Redis, Docker + Linux, Cloudflare, Sentry, LLM integrations (Claude / GPT / local Ollama), Stripe + SEPA, Postmark / Resend.
+Stack we use daily: Laravel 12, PHP 8.3, WordPress, Alpine + Tailwind, Astro / Next, GSAP, Percona MySQL, PostgreSQL, Redis, Docker + Linux, Cloudflare, Sentry, LLM integrations (Claude / GPT / local Ollama), Stripe + SEPA, Postmark / Resend.
 
 ## License
 

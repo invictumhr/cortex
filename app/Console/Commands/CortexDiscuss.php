@@ -16,6 +16,7 @@ use App\Services\Chat\ChatOrchestrator;
 use App\Services\Chat\CostEstimator;
 use App\Services\Chat\KnowledgeService;
 use App\Services\Chat\PanelArchitect;
+use App\Services\Chat\TitleGenerator;
 use App\Services\LanguageDetector;
 use Illuminate\Console\Command;
 use Illuminate\Support\Collection;
@@ -420,8 +421,14 @@ class CortexDiscuss extends Command
         // --agents > legacy --personas > legacy --architect > default.
         [$initMode, $panelConfig] = $this->resolveInitMode();
 
+        // Auto-generate title from topic when the user didn't provide --title.
+        $title = $this->option('title');
+        if (empty($title)) {
+            $title = app(TitleGenerator::class)->generate($topic, 'CLI');
+        }
+
         $chat = $user->chats()->create([
-            'title' => $this->option('title') ?: 'CLI rasprava',
+            'title' => $title ?: 'CLI rasprava',
             'context' => $context !== '' ? $context : null,
             'constraints' => $constraints !== '' ? $constraints : null,
             'strong' => (bool) $this->option('strong'),
