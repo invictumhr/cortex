@@ -5,19 +5,22 @@ import { useT } from '@/i18n/I18nProvider';
 
 /**
  * App sidebar — chat list grouped by "Today / Yesterday / Earlier", new-chat
- * button, account footer with theme + sign-out. Collapses to a 56px rail on
- * narrow screens so the chat content gets the breathing room.
+ * button, account footer with theme + sign-out.
+ *
+ * Responsive behaviour:
+ *   Mobile (< sm):  full-width, always expanded. Collapse toggle hidden.
+ *   Desktop (sm+):  collapsible between 56px rail and 256px panel.
+ *
+ * Props:
+ *   onNewChat   — when provided, the "New Chat" button calls this instead of
+ *                 navigating. Used by Index (mobile) to open the form overlay.
+ *   mobileHidden — hides sidebar on mobile (< sm). Used by Show page.
  */
-export default function ChatSidebar({ chats, activeId }) {
+export default function ChatSidebar({ chats, activeId, onNewChat, mobileHidden = false }) {
     const { t } = useT();
     const user = usePage().props.auth?.user;
     const [collapsed, setCollapsed] = useState(false);
 
-    // Optimistic-hide set — adding a chat id here removes its row from the
-    // sidebar the same tick the user clicks Archive or Delete. The actual
-    // request fires in the background; if it fails the id is removed and an
-    // alert surfaces. On a real DB-backed Inertia reload the chat will
-    // already be gone from `chats`, so the set just naturally empties.
     const [hiddenIds, setHiddenIds] = useState(() => new Set());
 
     const hide = (id) => setHiddenIds((s) => new Set(s).add(id));
@@ -35,23 +38,24 @@ export default function ChatSidebar({ chats, activeId }) {
 
     return (
         <aside
-            className={`relative flex shrink-0 flex-col border-r border-ink-200/60 bg-white text-ink-700 transition-[width] duration-200 ease-snap dark:border-ink-800/60 dark:bg-ink-900 dark:text-ink-200 ${
-                collapsed ? 'w-14' : 'w-64'
+            className={`relative ${mobileHidden ? 'hidden sm:flex' : 'flex'} w-full shrink-0 flex-col border-r border-ink-200/60 bg-white text-ink-700 transition-[width] duration-200 ease-snap dark:border-ink-800/60 dark:bg-ink-900 dark:text-ink-200 ${
+                collapsed ? 'sm:w-14' : 'sm:w-64'
             }`}
         >
             <div className="flex items-center justify-between gap-2 px-3 py-3">
                 <Link
                     href="/chats"
                     className={`flex items-center gap-2 overflow-hidden text-sm font-semibold tracking-tight ${
-                        collapsed ? 'justify-center' : ''
+                        collapsed ? 'sm:justify-center' : ''
                     }`}
                 >
                     <BrandMark className="h-6 w-6 shrink-0" />
-                    {!collapsed && <span className="text-ink-900 dark:text-ink-50">Cortex</span>}
+                    <span className={`text-ink-900 dark:text-ink-50 ${collapsed ? 'sm:hidden' : ''}`}>Cortex</span>
                 </Link>
+                {/* Collapse toggle — desktop only */}
                 <button
                     onClick={() => setCollapsed((v) => !v)}
-                    className="rounded-lg p-1 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700 dark:hover:bg-ink-800 dark:hover:text-ink-200"
+                    className="hidden rounded-lg p-1 text-ink-500 transition-colors hover:bg-ink-100 hover:text-ink-700 sm:block dark:hover:bg-ink-800 dark:hover:text-ink-200"
                     title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}
                 >
                     <ChevronIcon className={`h-4 w-4 transition-transform ${collapsed ? 'rotate-180' : ''}`} />
@@ -59,25 +63,36 @@ export default function ChatSidebar({ chats, activeId }) {
             </div>
 
             <div className="px-2 pb-2">
-                <Link
-                    href="/chats"
-                    className={`flex items-center gap-2 rounded-xl bg-cortex-600 px-3 py-2 text-sm font-medium text-white shadow-soft transition-colors hover:bg-cortex-500 ${
-                        collapsed ? 'justify-center' : ''
-                    }`}
-                >
-                    <PlusIcon className="h-4 w-4 shrink-0" />
-                    {!collapsed && <span>{t('sidebar.newChat')}</span>}
-                </Link>
+                {onNewChat ? (
+                    <button
+                        type="button"
+                        onClick={onNewChat}
+                        className={`flex w-full items-center gap-2 rounded-xl bg-cortex-600 px-3 py-2 text-sm font-medium text-white shadow-soft transition-colors hover:bg-cortex-500 ${
+                            collapsed ? 'sm:justify-center' : ''
+                        }`}
+                    >
+                        <PlusIcon className="h-4 w-4 shrink-0" />
+                        <span className={collapsed ? 'sm:hidden' : ''}>{t('sidebar.newChat')}</span>
+                    </button>
+                ) : (
+                    <Link
+                        href="/chats"
+                        className={`flex items-center gap-2 rounded-xl bg-cortex-600 px-3 py-2 text-sm font-medium text-white shadow-soft transition-colors hover:bg-cortex-500 ${
+                            collapsed ? 'sm:justify-center' : ''
+                        }`}
+                    >
+                        <PlusIcon className="h-4 w-4 shrink-0" />
+                        <span className={collapsed ? 'sm:hidden' : ''}>{t('sidebar.newChat')}</span>
+                    </Link>
+                )}
             </div>
 
             <nav className="flex-1 overflow-y-auto px-1.5 pb-2">
                 {Object.entries(groups).map(([labelKey, items]) => (
                     <div key={labelKey} className="mt-2">
-                        {!collapsed && (
-                            <div className="px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-500">
-                                {t(labelKey)}
-                            </div>
-                        )}
+                        <div className={`px-2.5 pb-1 text-[11px] font-medium uppercase tracking-wider text-ink-400 dark:text-ink-500 ${collapsed ? 'sm:hidden' : ''}`}>
+                            {t(labelKey)}
+                        </div>
                         <div className="space-y-0.5">
                             {items.map((c) => (
                                 <ChatItem
@@ -92,38 +107,34 @@ export default function ChatSidebar({ chats, activeId }) {
                         </div>
                     </div>
                 ))}
-                {visibleChats.length === 0 && !collapsed && (
-                    <div className="mt-6 px-3 text-center text-xs text-ink-400">
+                {visibleChats.length === 0 && (
+                    <div className={`mt-6 px-3 text-center text-xs text-ink-400 ${collapsed ? 'sm:hidden' : ''}`}>
                         {t('sidebar.empty')}
                     </div>
                 )}
             </nav>
 
             <div className="border-t border-ink-200/60 px-2 py-2 dark:border-ink-800/60">
-                {!collapsed && (
-                    <div className="mb-2 flex items-center justify-between px-1">
-                        <ThemeToggle />
-                        <a
-                            href="/admin"
-                            className="rounded-lg px-2 py-1 text-[11px] text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700 dark:hover:bg-ink-800 dark:hover:text-ink-200"
-                        >
-                            {t('sidebar.admin')}
-                        </a>
-                    </div>
-                )}
+                <div className={`mb-2 flex items-center justify-between px-1 ${collapsed ? 'sm:hidden' : ''}`}>
+                    <ThemeToggle />
+                    <a
+                        href="/admin"
+                        className="rounded-lg px-2 py-1 text-[11px] text-ink-400 transition-colors hover:bg-ink-100 hover:text-ink-700 dark:hover:bg-ink-800 dark:hover:text-ink-200"
+                    >
+                        {t('sidebar.admin')}
+                    </a>
+                </div>
                 <a
                     href="/user"
                     className={`flex items-center gap-2 rounded-xl px-2 py-1.5 text-sm text-ink-700 transition-colors hover:bg-ink-100 dark:text-ink-200 dark:hover:bg-ink-800 ${
-                        collapsed ? 'justify-center' : ''
+                        collapsed ? 'sm:justify-center' : ''
                     }`}
                 >
                     <Avatar name={user?.name} />
-                    {!collapsed && (
-                        <span className="min-w-0 flex-1 truncate text-left">
-                            <span className="block truncate text-sm">{user?.name}</span>
-                            <span className="block truncate text-[11px] text-ink-400">{user?.email}</span>
-                        </span>
-                    )}
+                    <span className={`min-w-0 flex-1 truncate text-left ${collapsed ? 'sm:hidden' : ''}`}>
+                        <span className="block truncate text-sm">{user?.name}</span>
+                        <span className="block truncate text-[11px] text-ink-400">{user?.email}</span>
+                    </span>
                 </a>
             </div>
         </aside>
@@ -136,8 +147,6 @@ function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
     const [confirmDelete, setConfirmDelete] = useState(false);
     const menuRef = useRef(null);
 
-    // Click-outside closes the popover. Pointerdown not click so we beat
-    // the next ChatItem's potential click — keeps menu UX feeling instant.
     useEffect(() => {
         if (!menuOpen) return;
         const close = (e) => {
@@ -147,12 +156,6 @@ function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
         return () => document.removeEventListener('pointerdown', close);
     }, [menuOpen]);
 
-    /**
-     * Optimistic remove: hide the row immediately, fire the request in the
-     * background. If the request fails, un-hide and surface the error. On
-     * the next Inertia visit the freshly fetched chat list won't include
-     * this row anyway, so the local hidden set stays small.
-     */
     const optimisticRemove = async (httpMethod, url) => {
         onHide?.(chat.id);
         setMenuOpen(false);
@@ -160,7 +163,6 @@ function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
             await window.axios[httpMethod](url);
         } catch (err) {
             onUnhide?.(chat.id);
-            // eslint-disable-next-line no-alert
             window.alert(err.response?.data?.error || 'Action failed.');
         }
     };
@@ -184,11 +186,6 @@ function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
     };
 
     return (
-        // `group` lives on the wrapping div, not the inner Link — the (...)
-        // button is a sibling of Link, and we want hovering ANYWHERE in the
-        // row (Link area OR over the button itself) to keep the button
-        // visible. Previous version had `group` on Link, so moving the
-        // cursor from Link onto the button broke the hover state.
         <div className="group relative">
             <Link
                 href={`/chats/${chat.id}`}
@@ -200,33 +197,25 @@ function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
                 title={chat.title}
             >
                 <ChatDot active={active} status={chat.status} />
-                {!collapsed && (
-                    <span className="min-w-0 flex-1 truncate">{chat.title || 'Untitled'}</span>
-                )}
+                <span className={`min-w-0 flex-1 truncate ${collapsed ? 'sm:hidden' : ''}`}>{chat.title || 'Untitled'}</span>
             </Link>
 
-            {/* (...) actions button — absolute-positioned so the Link spans
-                the full row but the menu trigger captures clicks separately.
-                Hidden by default, shown on row hover or while its menu is
-                open. Same gate for every row regardless of active state — the
-                actions belong to the chat, not to "the currently selected"
-                chat specifically. */}
-            {!collapsed && (
-                <button
-                    type="button"
-                    onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setMenuOpen((v) => !v);
-                    }}
-                    title={t('chat.actions.open')}
-                    className={`absolute right-1 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-ink-400 transition-opacity hover:bg-ink-200 hover:text-ink-700 dark:hover:bg-ink-700 dark:hover:text-ink-200 ${
-                        menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
-                    }`}
-                >
-                    <DotsIcon className="h-3.5 w-3.5" />
-                </button>
-            )}
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setMenuOpen((v) => !v);
+                }}
+                title={t('chat.actions.open')}
+                className={`absolute right-1 top-1/2 -translate-y-1/2 flex h-6 w-6 items-center justify-center rounded-md text-ink-400 transition-opacity hover:bg-ink-200 hover:text-ink-700 dark:hover:bg-ink-700 dark:hover:text-ink-200 ${
+                    collapsed ? 'sm:hidden' : ''
+                } ${
+                    menuOpen ? 'opacity-100' : 'sm:opacity-0 sm:group-hover:opacity-100 focus-visible:opacity-100'
+                }`}
+            >
+                <DotsIcon className="h-3.5 w-3.5" />
+            </button>
 
             {menuOpen && (
                 <div
@@ -263,7 +252,6 @@ function ChatItem({ chat, active, collapsed, onHide, onUnhide }) {
     );
 }
 
-/** Modal that asks the user to commit to an irreversible delete. */
 function DeleteConfirmModal({ title, onConfirm, onCancel }) {
     const { t } = useT();
     return (
@@ -338,8 +326,6 @@ function Avatar({ name }) {
 }
 
 function BrandMark({ className }) {
-    // A simple monogram — three stacked nodes, gradient-filled. Distinct from
-    // Claude's spark and GPT's hex, hints at the multi-persona core.
     return (
         <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -377,8 +363,6 @@ function groupByDay(chats) {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    // Keys are i18n keys, not visible text — render-side calls t(labelKey) so
-    // a HR/EN toggle flips group headings without rebuilding the structure.
     const out = { 'sidebar.today': [], 'sidebar.yesterday': [], 'sidebar.earlier': [] };
     for (const chat of chats) {
         const d = chat.updated_at ? new Date(chat.updated_at) : new Date(chat.created_at || Date.now());
@@ -388,6 +372,5 @@ function groupByDay(chats) {
         else if (day.getTime() === yesterday.getTime()) out['sidebar.yesterday'].push(chat);
         else out['sidebar.earlier'].push(chat);
     }
-    // Drop empty buckets so headings don't dangle.
     return Object.fromEntries(Object.entries(out).filter(([, v]) => v.length > 0));
 }

@@ -14,9 +14,12 @@ import { useT } from '@/i18n/I18nProvider';
  *   CUSTOM        — pick (persona, model) pairs by hand. Same persona may
  *                   appear twice with different models.
  *
- * The same backend route handles all three: the form posts `init_mode` plus
- * one of {agents, model_ids, pairs}. Composer kicks in at first user message
- * for quick / custom_models; custom mode pre-attaches at chat creation.
+ * Mobile layout:
+ *   Sidebar fills the screen (chat list). Tapping "New Chat" slides a form
+ *   overlay in from the right. Tapping a chat navigates to Show.
+ *
+ * Desktop layout:
+ *   Sidebar (left) + form content (right), as before.
  */
 export default function Index({ chats, personas, models }) {
     const { t, lang } = useT();
@@ -25,6 +28,7 @@ export default function Index({ chats, personas, models }) {
     const walletEmpty = wallet && wallet.available < (wallet.min_send ?? 0.05);
 
     const [mode, setMode] = useState('quick');
+    const [showForm, setShowForm] = useState(false);
 
     const { data, setData, post, processing } = useForm({
         title: '',
@@ -52,13 +56,86 @@ export default function Index({ chats, personas, models }) {
         (mode === 'custom' && data.pairs.length >= 2)
     );
 
+    const formContent = (
+        <>
+            <BalanceBanner />
+
+            <form onSubmit={submit} className="surface p-4 space-y-5 sm:p-5">
+                <input
+                    value={data.title}
+                    onChange={(e) => setData('title', e.target.value)}
+                    placeholder={t('welcome.titlePh')}
+                    className="w-full border-0 border-b border-ink-200/60 bg-transparent px-0 py-2 text-base font-medium text-ink-900 placeholder:text-ink-400 focus:border-cortex-500 focus:ring-0 dark:border-ink-700/60 dark:text-ink-100"
+                />
+                <textarea
+                    value={data.description}
+                    onChange={(e) => setData('description', e.target.value)}
+                    placeholder={t('welcome.topicPh')}
+                    rows={3}
+                    className="w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed text-ink-800 placeholder:text-ink-400 focus:ring-0 dark:text-ink-200"
+                />
+
+                <ModeTabs value={mode} onChange={setMode} t={t} />
+
+                {mode === 'quick' && (
+                    <QuickPanel
+                        t={t}
+                        agents={data.agents}
+                        onAgents={(n) => setData('agents', n)}
+                        strong={data.strong}
+                        onStrong={(v) => setData('strong', v)}
+                    />
+                )}
+                {mode === 'custom_models' && (
+                    <ModelsPanel
+                        t={t}
+                        models={models}
+                        selected={data.model_ids}
+                        onChange={(ids) => setData('model_ids', ids)}
+                    />
+                )}
+                {mode === 'custom' && (
+                    <CustomPanel
+                        t={t}
+                        personas={personas}
+                        models={models}
+                        pairs={data.pairs}
+                        onChange={(p) => setData('pairs', p)}
+                    />
+                )}
+
+                <div className="flex items-center justify-between gap-3 pt-1">
+                    {wallet && (
+                        <span className="text-xs tabular-nums text-ink-400">
+                            {t('welcome.balance', { balance: (wallet.available ?? 0).toFixed(2) })}
+                        </span>
+                    )}
+                    {walletEmpty ? (
+                        <a href={wallet.topup_url} className="btn-primary !bg-rose-600 hover:!bg-rose-500">
+                            {t('welcome.topupBtn')}
+                            <ArrowRightIcon className="h-4 w-4" />
+                        </a>
+                    ) : (
+                        <button type="submit" disabled={!ready} className="btn-primary">
+                            {t('welcome.startBtn')}
+                            <ArrowRightIcon className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+            </form>
+        </>
+    );
+
     return (
         <>
             <Head title="Cortex" />
             <div className="flex h-screen overflow-hidden bg-ink-50 text-ink-800 dark:bg-ink-950 dark:text-ink-200">
-                <ChatSidebar chats={chats} activeId={null} />
+                {/* Sidebar — full-width on mobile, fixed on desktop.
+                    On mobile: onNewChat opens the form overlay. */}
+                <ChatSidebar chats={chats} activeId={null} onNewChat={() => setShowForm(true)} />
 
-                <main className="flex min-w-0 flex-1 flex-col">
+                {/* Desktop content — hidden on mobile */}
+                <main className="hidden min-w-0 flex-1 flex-col sm:flex">
                     <header className="flex shrink-0 items-center justify-between border-b border-ink-200/60 px-6 py-3 dark:border-ink-800/60">
                         <span className="text-sm font-medium text-ink-500 dark:text-ink-400">
                             {t('index.newBoardroom')}
@@ -69,7 +146,7 @@ export default function Index({ chats, personas, models }) {
                     <div className="flex-1 overflow-y-auto px-6 py-12">
                         <div className="mx-auto max-w-2xl space-y-8">
                             <div className="space-y-3 text-center">
-                                <h1 className="text-3xl font-semibold tracking-tight text-ink-900 dark:text-ink-50 sm:text-4xl">
+                                <h1 className="text-3xl font-semibold tracking-tight text-ink-900 sm:text-4xl dark:text-ink-50">
                                     {user?.name?.split(' ')[0]
                                         ? t('welcome.greeting', { name: user.name.split(' ')[0] })
                                         : t('welcome.greetingAnon')}
@@ -79,72 +156,7 @@ export default function Index({ chats, personas, models }) {
                                 </p>
                             </div>
 
-                            <BalanceBanner />
-
-                            <form onSubmit={submit} className="surface p-5 space-y-5">
-                                <input
-                                    value={data.title}
-                                    onChange={(e) => setData('title', e.target.value)}
-                                    placeholder={t('welcome.titlePh')}
-                                    className="w-full border-0 border-b border-ink-200/60 bg-transparent px-0 py-2 text-base font-medium text-ink-900 placeholder:text-ink-400 focus:border-cortex-500 focus:ring-0 dark:border-ink-700/60 dark:text-ink-100"
-                                />
-                                <textarea
-                                    value={data.description}
-                                    onChange={(e) => setData('description', e.target.value)}
-                                    placeholder={t('welcome.topicPh')}
-                                    rows={3}
-                                    className="w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed text-ink-800 placeholder:text-ink-400 focus:ring-0 dark:text-ink-200"
-                                />
-
-                                {/* Three-tab init mode picker */}
-                                <ModeTabs value={mode} onChange={setMode} t={t} />
-
-                                {mode === 'quick' && (
-                                    <QuickPanel
-                                        t={t}
-                                        agents={data.agents}
-                                        onAgents={(n) => setData('agents', n)}
-                                        strong={data.strong}
-                                        onStrong={(v) => setData('strong', v)}
-                                    />
-                                )}
-                                {mode === 'custom_models' && (
-                                    <ModelsPanel
-                                        t={t}
-                                        models={models}
-                                        selected={data.model_ids}
-                                        onChange={(ids) => setData('model_ids', ids)}
-                                    />
-                                )}
-                                {mode === 'custom' && (
-                                    <CustomPanel
-                                        t={t}
-                                        personas={personas}
-                                        models={models}
-                                        pairs={data.pairs}
-                                        onChange={(p) => setData('pairs', p)}
-                                    />
-                                )}
-
-                                <div className="flex items-center justify-between gap-3 pt-1">
-                                    {wallet && (
-                                        <span className="text-xs tabular-nums text-ink-400">
-                                            {t('welcome.balance', { balance: (wallet.available ?? 0).toFixed(2) })}
-                                        </span>
-                                    )}
-                                    {walletEmpty ? (
-                                        <a href={wallet.topup_url} className="btn-primary !bg-rose-600 hover:!bg-rose-500">
-                                            {t('welcome.topupBtn')}
-                                            <ArrowRightIcon className="h-4 w-4" />
-                                        </a>
-                                    ) : (
-                                        <button type="submit" disabled={!ready} className="btn-primary">
-                                            {t('welcome.startBtn')}
-                                            <ArrowRightIcon className="h-4 w-4" />
-                                        </button>
-                                    )}
-                                </div>
-                            </form>
+                            {formContent}
 
                             {chats.length > 0 && (
                                 <div>
@@ -170,6 +182,44 @@ export default function Index({ chats, personas, models }) {
                         </div>
                     </div>
                 </main>
+
+                {/* Mobile form overlay — slides in from right */}
+                <div
+                    className={`fixed inset-0 z-40 flex flex-col bg-ink-50 transition-transform duration-300 ease-snap sm:hidden dark:bg-ink-950 ${
+                        showForm ? 'translate-x-0' : 'translate-x-full pointer-events-none'
+                    }`}
+                >
+                    <header className="flex shrink-0 items-center gap-3 border-b border-ink-200/60 px-3 py-3 dark:border-ink-800/60">
+                        <button
+                            type="button"
+                            onClick={() => setShowForm(false)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-ink-100 dark:hover:bg-ink-800"
+                        >
+                            <BackIcon className="h-5 w-5" />
+                        </button>
+                        <span className="flex-1 text-sm font-medium text-ink-700 dark:text-ink-200">
+                            {t('index.newBoardroom')}
+                        </span>
+                        <LanguageToggle />
+                    </header>
+
+                    <div className="flex-1 overflow-y-auto px-4 py-6">
+                        <div className="mx-auto max-w-lg space-y-6">
+                            <div className="space-y-2 text-center">
+                                <h1 className="text-2xl font-semibold tracking-tight text-ink-900 dark:text-ink-50">
+                                    {user?.name?.split(' ')[0]
+                                        ? t('welcome.greeting', { name: user.name.split(' ')[0] })
+                                        : t('welcome.greetingAnon')}
+                                </h1>
+                                <p className="text-sm text-ink-500 dark:text-ink-400">
+                                    {t('welcome.lead')}
+                                </p>
+                            </div>
+
+                            {formContent}
+                        </div>
+                    </div>
+                </div>
             </div>
         </>
     );
@@ -177,8 +227,6 @@ export default function Index({ chats, personas, models }) {
 
 /* ────────────────────── 3-tab segmented control ─────────────────────── */
 function ModeTabs({ value, onChange, t }) {
-    // Renamed mode keys to dot-namespaces ('mode.quick.label' etc.) so the
-    // translations table keeps a tidy alphabetical sort.
     const tabs = [
         { id: 'quick',         labelKey: 'mode.quick.label',         hintKey: 'mode.quick.hint' },
         { id: 'custom_models', labelKey: 'mode.custommodels.label',  hintKey: 'mode.custommodels.hint' },
@@ -193,14 +241,14 @@ function ModeTabs({ value, onChange, t }) {
                         type="button"
                         key={tab.id}
                         onClick={() => onChange(tab.id)}
-                        className={`flex flex-col items-center gap-0.5 rounded-xl px-3 py-2 text-xs font-medium transition-all duration-150 ease-snap ${
+                        className={`flex flex-col items-center gap-0.5 rounded-xl px-2 py-2 text-xs font-medium transition-all duration-150 ease-snap sm:px-3 ${
                             active
                                 ? 'bg-white text-cortex-700 shadow-soft dark:bg-ink-900 dark:text-cortex-200'
                                 : 'text-ink-500 hover:text-ink-700 dark:text-ink-400 dark:hover:text-ink-200'
                         }`}
                     >
                         <span>{t(tab.labelKey)}</span>
-                        <span className="text-[10px] text-ink-400">{t(tab.hintKey)}</span>
+                        <span className="hidden text-[10px] text-ink-400 sm:block">{t(tab.hintKey)}</span>
                     </button>
                 );
             })}
@@ -319,7 +367,6 @@ function CustomPanel({ personas, models, pairs, onChange, t }) {
     const [personaId, setPersonaId] = useState(personas[0]?.id ?? null);
     const [modelId, setModelId] = useState(null);
 
-    // When the user picks a new persona, suggest its default model if any.
     useEffect(() => {
         const p = personas.find((x) => x.id === personaId);
         if (p?.ai_model_id) setModelId(p.ai_model_id);
@@ -409,6 +456,9 @@ function CustomPanel({ personas, models, pairs, onChange, t }) {
     );
 }
 
+function BackIcon({ className }) {
+    return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>;
+}
 function ArrowRightIcon({ className }) {
     return <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>;
 }

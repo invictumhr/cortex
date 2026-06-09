@@ -60,8 +60,8 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
     const canSend = !locked && !sending && text.trim().length > 0;
 
     return (
-        <div className="border-t border-ink-200/60 bg-white/80 px-4 py-4 backdrop-blur-md dark:border-ink-800/60 dark:bg-ink-900/80">
-            <div className="mx-auto max-w-3xl">
+        <div className="border-t border-ink-200/60 bg-white/80 px-3 py-3 backdrop-blur-md sm:px-4 sm:py-4 dark:border-ink-800/60 dark:bg-ink-900/80">
+            <div className="mx-auto sm:max-w-3xl">
                 {/* Generic send error — non-funds. Dismissible inline notice. */}
                 {sendError && sendError.kind !== 'insufficient_funds' && (
                     <div className="mb-2 flex items-center justify-between gap-3 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700 ring-1 ring-rose-200/60 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900/60">

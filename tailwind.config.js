@@ -81,10 +81,15 @@ export default {
                     '0%, 100%': { opacity: '0.4' },
                     '50%': { opacity: '1' },
                 },
+                'slide-in-right': {
+                    '0%': { transform: 'translateX(20%)', opacity: '0' },
+                    '100%': { transform: 'translateX(0)', opacity: '1' },
+                },
             },
             animation: {
                 'fade-up': 'fade-up 0.25s ease-out',
                 'soft-pulse': 'soft-pulse 1.4s ease-in-out infinite',
+                'slide-in-right': 'slide-in-right 0.3s cubic-bezier(0.32, 0.72, 0, 1)',
             },
         },
     },

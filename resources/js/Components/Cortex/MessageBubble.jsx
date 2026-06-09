@@ -56,7 +56,7 @@ export default function MessageBubble({ message, animate = false, showMeta = tru
     if (message.role === 'user') {
         return (
             <div className="flex justify-end animate-fade-up">
-                <div className="max-w-[85%] rounded-2xl rounded-br-md bg-cortex-50 px-4 py-2.5 text-ink-800 ring-1 ring-cortex-100 dark:bg-cortex-950/60 dark:text-ink-100 dark:ring-cortex-900/60">
+                <div className="max-w-[92%] rounded-2xl rounded-br-md bg-cortex-50 px-4 py-2.5 text-ink-800 ring-1 ring-cortex-100 sm:max-w-[85%] dark:bg-cortex-950/60 dark:text-ink-100 dark:ring-cortex-900/60">
                     <div className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
                         {message.content}
                     </div>
