@@ -136,7 +136,7 @@ export default function Show({
     return (
         <>
             <Head title={chat.title} />
-            <div className="flex h-screen overflow-hidden bg-ink-50 text-ink-800 dark:bg-ink-950 dark:text-ink-100">
+            <div className="flex h-dvh overflow-hidden bg-ink-50 text-ink-800 dark:bg-ink-950 dark:text-ink-100">
                 {/* Sidebar — hidden on mobile, visible on desktop */}
                 <ChatSidebar chats={chats} activeId={chat.id} mobileHidden />
 
@@ -271,7 +271,7 @@ export default function Show({
                                 <XIcon className="h-4 w-4" />
                             </button>
                         </div>
-                        <div className="h-[calc(100vh-3.5rem)] overflow-y-auto p-4">
+                        <div className="h-[calc(100dvh-3.5rem)] overflow-y-auto p-4">
                             <PersonaInfoPanel
                                 chat={chat}
                                 chatPersonas={personas}

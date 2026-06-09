@@ -129,7 +129,7 @@ export default function Index({ chats, personas, models }) {
     return (
         <>
             <Head title="Cortex" />
-            <div className="flex h-screen overflow-hidden bg-ink-50 text-ink-800 dark:bg-ink-950 dark:text-ink-200">
+            <div className="flex h-dvh overflow-hidden bg-ink-50 text-ink-800 dark:bg-ink-950 dark:text-ink-200">
                 {/* Sidebar — full-width on mobile, fixed on desktop.
                     On mobile: onNewChat opens the form overlay. */}
                 <ChatSidebar chats={chats} activeId={null} onNewChat={() => setShowForm(true)} />
