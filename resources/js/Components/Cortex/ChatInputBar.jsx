@@ -113,7 +113,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
                                 placeholder={t('input.urlPlaceholder')}
-                                className="flex-1 min-w-[200px] rounded-full border-0 bg-ink-100 px-3.5 py-1 text-xs text-ink-700 ring-1 ring-ink-200/60 placeholder:text-ink-400 focus:ring-2 focus:ring-cortex-500/40 dark:bg-ink-800 dark:text-ink-200 dark:ring-ink-700/60"
+                                className="flex-1 min-w-[200px] rounded-full border-0 bg-ink-100 px-3.5 py-1 text-base text-ink-700 ring-1 ring-ink-200/60 placeholder:text-ink-400 focus:ring-2 focus:ring-cortex-500/40 sm:text-xs dark:bg-ink-800 dark:text-ink-200 dark:ring-ink-700/60"
                             />
                         )}
                     </div>
@@ -133,7 +133,7 @@ export default function ChatInputBar({ disabled, sending, onSend, onPowerShell, 
                         rows={1}
                         disabled={walletEmpty}
                         placeholder={walletEmpty ? t('input.walletEmpty') : t('input.placeholder')}
-                        className="flex-1 resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed text-ink-900 placeholder:text-ink-400 focus:ring-0 disabled:cursor-not-allowed dark:text-ink-100"
+                        className="flex-1 resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-900 placeholder:text-ink-400 focus:ring-0 disabled:cursor-not-allowed dark:text-ink-100"
                         style={{ maxHeight: '240px' }}
                     />
 

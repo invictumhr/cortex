@@ -72,7 +72,7 @@ export default function Index({ chats, personas, models }) {
                     onChange={(e) => setData('description', e.target.value)}
                     placeholder={t('welcome.topicPh')}
                     rows={3}
-                    className="w-full resize-none border-0 bg-transparent p-0 text-[15px] leading-relaxed text-ink-800 placeholder:text-ink-400 focus:ring-0 dark:text-ink-200"
+                    className="w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-ink-800 placeholder:text-ink-400 focus:ring-0 dark:text-ink-200"
                 />
 
                 <ModeTabs value={mode} onChange={setMode} t={t} />
@@ -390,7 +390,7 @@ function CustomPanel({ personas, models, pairs, onChange, t }) {
                 <select
                     value={personaId ?? ''}
                     onChange={(e) => setPersonaId(Number(e.target.value))}
-                    className="rounded-xl border-ink-200/60 bg-white text-sm text-ink-800 focus:border-cortex-500 focus:ring-cortex-500/30 dark:border-ink-700/60 dark:bg-ink-900 dark:text-ink-100"
+                    className="rounded-xl border-ink-200/60 bg-white text-base text-ink-800 focus:border-cortex-500 focus:ring-cortex-500/30 sm:text-sm dark:border-ink-700/60 dark:bg-ink-900 dark:text-ink-100"
                 >
                     {personas.map((p) => (
                         <option key={p.id} value={p.id}>
@@ -401,7 +401,7 @@ function CustomPanel({ personas, models, pairs, onChange, t }) {
                 <select
                     value={modelId ?? ''}
                     onChange={(e) => setModelId(Number(e.target.value))}
-                    className="rounded-xl border-ink-200/60 bg-white text-sm text-ink-800 focus:border-cortex-500 focus:ring-cortex-500/30 dark:border-ink-700/60 dark:bg-ink-900 dark:text-ink-100"
+                    className="rounded-xl border-ink-200/60 bg-white text-base text-ink-800 focus:border-cortex-500 focus:ring-cortex-500/30 sm:text-sm dark:border-ink-700/60 dark:bg-ink-900 dark:text-ink-100"
                 >
                     <option value="">{t('custom.pickModel')}</option>
                     {models.map((m) => (
