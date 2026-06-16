@@ -10,8 +10,13 @@ use Illuminate\Support\Facades\Gate;
 
 class ChatActionController extends Controller
 {
-    /** Seconds a heartbeat keeps a continuous discussion alive. */
-    private const HEARTBEAT_TTL = 50;
+    /**
+     * Seconds a heartbeat keeps a continuous discussion alive. The page pings
+     * every 20s; 120s tolerates five missed pings (mobile network jitter,
+     * laptop wake-up) before the loop pauses itself — at 50s a single slow
+     * ping pair was enough to falsely pause an actively-watched discussion.
+     */
+    public const HEARTBEAT_TTL = 120;
 
     public function __construct(private ChatOrchestrator $orchestrator) {}
 

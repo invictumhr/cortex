@@ -50,6 +50,18 @@ class Chat extends Model
         static::creating(function (Chat $chat) {
             $chat->public_id ??= hash('sha256', Str::random(40));
         });
+
+        // FK cascade removes the attachment ROWS without Eloquent events, so
+        // the uploaded files would leak on disk after every chat deletion.
+        // All uploads live under one per-chat directory — drop it wholesale.
+        static::deleting(function (Chat $chat) {
+            try {
+                \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'local'))
+                    ->deleteDirectory('chat-attachments/'.$chat->id);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        });
     }
 
     protected function casts(): array

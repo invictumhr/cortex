@@ -17,6 +17,25 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
+    protected static function booted(): void
+    {
+        // GDPR completeness: FK cascades wipe the user's DB rows but fire no
+        // Eloquent events, so attachment FILES would stay on disk forever.
+        // Purge each chat's upload directory while the rows still exist.
+        // Storage failure must never block an account deletion — log and go.
+        static::deleting(function (User $user) {
+            $disk = \Illuminate\Support\Facades\Storage::disk(config('filesystems.default', 'local'));
+
+            foreach ($user->chats()->pluck('id') as $chatId) {
+                try {
+                    $disk->deleteDirectory('chat-attachments/'.$chatId);
+                } catch (\Throwable $e) {
+                    report($e);
+                }
+            }
+        });
+    }
+
     /**
      * The attributes that are mass assignable.
      *

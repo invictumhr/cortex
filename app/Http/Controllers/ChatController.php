@@ -52,12 +52,22 @@ class ChatController extends Controller
 
         $chat->load(['personas' => fn ($q) => $q->with('aiModel:id,name,model_string')->orderBy('sort_order')]);
 
+        // Initial payload carries only the newest page of the transcript — a
+        // long-running continuous chat can hold thousands of messages, and
+        // shipping them all made the Inertia payload (and first render) crawl.
+        // Older pages stream in via GET /chats/{chat}/messages?before_id=…
+        $messageLimit = 100;
+        $recentMessages = $chat->messages()
+            ->with(['persona:id,name,title,avatar_emoji,avatar_color,is_scribe', 'attachments'])
+            ->orderByDesc('id')
+            ->limit($messageLimit + 1)
+            ->get();
+        $hasEarlierMessages = $recentMessages->count() > $messageLimit;
+
         return Inertia::render('Chats/Show', [
             'chat' => $chat,
-            'messages' => $chat->messages()
-                ->with(['persona:id,name,title,avatar_emoji,avatar_color,is_scribe', 'attachments'])
-                ->orderBy('id')
-                ->get(),
+            'messages' => $recentMessages->take($messageLimit)->reverse()->values(),
+            'hasEarlierMessages' => $hasEarlierMessages,
             'scribeSummaries' => $chat->scribeSummaries()->orderBy('id')->get(),
             'allPersonas' => $this->speakerPersonas()
                 ->concat($chat->personas->where('is_ephemeral', true))

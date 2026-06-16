@@ -36,11 +36,13 @@ class Wallet extends Model
     }
 
     /**
-     * Spendable euros — total balance minus what's already frozen for in-flight
-     * boardroom runs. This is what the UI and the pre-flight check both read.
+     * Spendable euros. `WalletService::reserve()` already moves held funds out
+     * of `balance` and into `reserved_balance`, so `balance` alone IS the
+     * spendable amount — subtracting `reserved_balance` again would count every
+     * in-flight hold twice. This is what the UI and pre-flight checks read.
      */
     public function availableBalance(): float
     {
-        return (float) $this->balance - (float) $this->reserved_balance;
+        return (float) $this->balance;
     }
 }

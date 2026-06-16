@@ -93,7 +93,7 @@ class ChairService
             return null;
         }
 
-        $providerCost = (float) $chair->aiModel->calculateCost($response->inputTokens, $response->outputTokens);
+        $providerCost = (float) $chair->aiModel->calculateCost($response->billableInputTokens(), $response->outputTokens);
         $userCost = round($providerCost * $margin, 6);
 
         $settled = $this->walletService->commitDebit(

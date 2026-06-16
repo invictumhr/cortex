@@ -72,6 +72,17 @@ class GeneratePersonaResponse implements ShouldQueue
             return;
         }
 
+        // Budget pre-check — the post-respond check below catches the ceiling
+        // for the NEXT persona, but a chat resumed while already over budget
+        // (or pushed over by scribe/chair costs) would still fire one more
+        // paid call without this gate.
+        if ((float) $chat->total_cost >= (float) config('cortex.budget_limit')) {
+            $chat->update(['status' => Chat::STATUS_PAUSED]);
+            broadcast(new TurnCompleted($chat->refresh(), 'budget_exceeded'));
+
+            return;
+        }
+
         $personaId = $this->personaIds[$this->position] ?? null;
 
         if ($personaId !== null) {

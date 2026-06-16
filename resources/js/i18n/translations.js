@@ -119,6 +119,7 @@ export const translations = {
         // Show (chat detail) — status, hints, drawer
         'show.statusActive':      'Aktivna',
         'show.statusPaused':      'Pauzirana',
+        'show.loadEarlier':       'Učitaj ranije poruke',
         'show.heroTitle':         'Spreman kada budeš ti',
         'show.heroBody':          'Upiši temu dolje. Boardroom će je preuzeti i odgovoriti persona po persona.',
         'show.thinking':          '{name} razmišlja · krug {round}',
@@ -262,6 +263,7 @@ export const translations = {
         // Show (chat detail)
         'show.statusActive':      'Active',
         'show.statusPaused':      'Paused',
+        'show.loadEarlier':       'Load earlier messages',
         'show.heroTitle':         'Ready when you are',
         'show.heroBody':          'Type a topic below. The boardroom will pick it up and respond persona-by-persona.',
         'show.thinking':          '{name} is thinking · round {round}',

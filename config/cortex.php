@@ -16,6 +16,14 @@ return [
     // How many recent messages are fed to a persona as context.
     'context_message_limit' => (int) env('CORTEX_CONTEXT_MESSAGE_LIMIT', 30),
 
+    // Hard cap on the assembled transcript context, in rough tokens (~4 chars
+    // per token). The message-count limit above doesn't bound SIZE — thirty
+    // long messages plus attachment extracts can balloon past 100k tokens and
+    // blow through the pre-flight cost estimate. Oldest transcript lines are
+    // dropped first; the pinned context/constraints and scribe summary are
+    // never trimmed.
+    'context_token_budget' => (int) env('CORTEX_CONTEXT_TOKEN_BUDGET', 24000),
+
     // Hard ceiling on rounds per turn (runaway-loop protection).
     'max_rounds' => 200,
 
@@ -30,6 +38,19 @@ return [
     // When a persona's own model fails or returns nothing, retry once on this
     // model so the boardroom keeps the voice instead of dropping it.
     'fallback_model' => env('CORTEX_FALLBACK_MODEL', 'gpt-4o-mini'),
+
+    // Provider-side prompt caching (currently Anthropic cache_control). The
+    // per-persona system block repeats verbatim across rounds, so cache reads
+    // bill at 10% of the input rate — a large saving on context-heavy chats.
+    'prompt_caching' => (bool) env('CORTEX_PROMPT_CACHING', true),
+
+    // Transient provider failures (connection errors, 408/429, 5xx) retry on
+    // the SAME model with these backoff delays (ms) before the fallback model
+    // takes over. Two entries = up to three attempts per model.
+    'provider_retry_backoff_ms' => array_map(
+        'intval',
+        array_filter(explode(',', (string) env('CORTEX_PROVIDER_RETRY_BACKOFF_MS', '1000,4000'))),
+    ),
 
     // Cheap model that classifies a topic and auto-picks the best-fit panel.
     'router_model' => env('CORTEX_ROUTER_MODEL', 'gpt-4o-mini'),

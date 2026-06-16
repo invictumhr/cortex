@@ -118,7 +118,7 @@ class ScribeService
             throw $e;
         }
 
-        $providerCost = (float) $adapter->calculateCost($response->inputTokens, $response->outputTokens);
+        $providerCost = (float) $adapter->calculateCost($response->billableInputTokens(), $response->outputTokens);
         $userCost = round($providerCost * $margin, 6);
         $parsed = $this->parseScribeOutput($response->content);
 

@@ -68,17 +68,17 @@ class ContextBuilder
         $supportsVision = (bool) $persona->aiModel?->supports_vision;
         $images = $supportsVision ? $this->collectImages($recent) : [];
 
+        // Size cap: the message-count limit doesn't bound the BYTE size of the
+        // transcript (long messages + attachment extracts), so trim the oldest
+        // lines until the whole block fits the configured token budget. The
+        // scribe summary already covers what gets dropped.
+        $lines = $this->trimToTokenBudget($lines, $summary?->summary);
+
+        // Pinned context/constraints live in the SYSTEM prompt (see
+        // systemPrompt()): they're identical for every round, which makes the
+        // system block a stable prefix that provider-side prompt caching can
+        // reuse. Only the volatile parts (summary, transcript) stay here.
         $context = '';
-
-        if (filled($chat->context)) {
-            $context .= "=== POZNATI KONTEKST (činjenice o korisnikovom sustavu — uzmi zdravo za gotovo) ===\n"
-                .mb_substr(trim((string) $chat->context), 0, 12000)."\n\n";
-        }
-
-        if (filled($chat->constraints)) {
-            $context .= "=== TVRDA OGRANIČENJA (OBAVEZNO poštuj — prijedlog koji ih krši je bezvrijedan) ===\n"
-                .trim((string) $chat->constraints)."\n\n";
-        }
 
         if ($summary) {
             $context .= "SAŽETAK DOSADAŠNJE RASPRAVE (zapisničar Scribe):\n".trim((string) $summary->summary)."\n\n";
@@ -139,18 +139,78 @@ class ContextBuilder
         }
 
         if (filled($chat->constraints)) {
-            $prompt .= 'Korisnik je zadao TVRDA OGRANIČENJA (navedena u kontekstu poruke). Nijedan tvoj prijedlog ih ne smije '
+            $prompt .= 'Korisnik je zadao TVRDA OGRANIČENJA (navedena niže). Nijedan tvoj prijedlog ih ne smije '
                 ."kršiti — ako bi ideja prekršila ograničenje, ne iznosi je, nego predloži rješenje unutar granica.\n";
         }
 
-        return $prompt
-            ."Intelektualno poštenje (OBAVEZNO): NE izmišljaj konkretne brojke, statistike, postotke, benchmarke ni rezultate. "
+        $prompt .= "Intelektualno poštenje (OBAVEZNO): NE izmišljaj konkretne brojke, statistike, postotke, benchmarke ni rezultate. "
             ."Ne tvrdi da si proveo analizu, istrenirao model, pokrenuo upit ili nešto izmjerio — nemaš pristup stvarnim podacima. "
             ."Prijedloge iznosi kao hipoteze i obrazloženo razmišljanje; ono što tek treba izmjeriti izrijekom označi kao 'za provjeru'. "
             ."Ne pretpostavljaj činjenice o korisnikovoj situaciji koje nisu navedene (veličina tima, postojeći sustavi, budžet, "
             ."promet) — ako ti podatak nedostaje, reci to ili postavi pitanje umjesto da ga izmisliš.\n"
             .'JEZIK ODGOVORA (OBAVEZNO, nadjačava sve jezične upute iz tvog karaktera): pišeš ISKLJUČIVO na jeziku: '
             .($chat->language ?: config('cortex.deliberation_language', 'English')).'.';
+
+        // Pinned per-chat payload comes LAST and is round-invariant, so the
+        // whole system block stays byte-identical between rounds — that's what
+        // lets provider-side prompt caching (AnthropicAdapter) hit on every
+        // round after the first.
+        if (filled($chat->context)) {
+            $prompt .= "\n\n=== POZNATI KONTEKST (činjenice o korisnikovom sustavu — uzmi zdravo za gotovo) ===\n"
+                .mb_substr(trim((string) $chat->context), 0, 12000);
+        }
+
+        if (filled($chat->constraints)) {
+            $prompt .= "\n\n=== TVRDA OGRANIČENJA (OBAVEZNO poštuj — prijedlog koji ih krši je bezvrijedan) ===\n"
+                .trim((string) $chat->constraints);
+        }
+
+        return $prompt;
+    }
+
+    /**
+     * Drop the oldest transcript lines until the assembled context fits the
+     * rough token budget (~4 chars per token). A marker line replaces what
+     * was cut so personas know the transcript is partial.
+     *
+     * @param  array<int, string>  $lines
+     * @return array<int, string>
+     */
+    private function trimToTokenBudget(array $lines, ?string $summaryText): array
+    {
+        $budgetChars = max(4000, (int) config('cortex.context_token_budget', 24000) * 4);
+
+        // The summary travels alongside the transcript in the same message —
+        // count it against the budget but never trim it.
+        $fixedChars = mb_strlen((string) $summaryText);
+
+        $totalChars = $fixedChars;
+        foreach ($lines as $line) {
+            $totalChars += mb_strlen($line);
+        }
+
+        if ($totalChars <= $budgetChars) {
+            return $lines;
+        }
+
+        $trimmed = false;
+        while (count($lines) > 1 && $totalChars > $budgetChars) {
+            $totalChars -= mb_strlen(array_shift($lines));
+            $trimmed = true;
+        }
+
+        // A single line can still exceed the budget (giant attachment extract);
+        // hard-truncate it rather than sending an unbounded prompt.
+        if ($totalChars > $budgetChars && $lines !== []) {
+            $lines[0] = mb_substr($lines[0], 0, max(1000, $budgetChars - $fixedChars));
+            $trimmed = true;
+        }
+
+        if ($trimmed) {
+            array_unshift($lines, '[Stariji dio rasprave je izostavljen zbog duljine — osloni se na Scribeov sažetak.]');
+        }
+
+        return $lines;
     }
 
     private function speakerName(ChatMessage $message): string

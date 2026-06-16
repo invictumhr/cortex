@@ -177,6 +177,53 @@ class WalletServiceTest extends TestCase
         $assertInvariant();
     }
 
+    public function test_available_balance_is_balance_alone_not_minus_reserved(): void
+    {
+        // reserve() already moves held funds OUT of `balance`, so available
+        // must equal `balance` — subtracting reserved_balance again would
+        // count every in-flight hold twice (regression for the double-
+        // subtraction bug that made the UI/402-gate undershoot mid-run).
+        $svc = app(WalletService::class);
+        $user = $this->makeUser();
+        $wallet = $svc->forUser($user);
+        $svc->grant($wallet, 10.0, 'seed');
+
+        $svc->reserve($wallet->fresh(), 3.0, $this->makeModel());
+
+        $wallet->refresh();
+        $this->assertSame(7.0, (float) $wallet->balance);
+        $this->assertSame(3.0, (float) $wallet->reserved_balance);
+        $this->assertSame(7.0, $wallet->availableBalance(), 'available = balance, hold must not be subtracted twice');
+    }
+
+    public function test_payment_source_ref_is_unique_at_db_level(): void
+    {
+        // The application-level idempotency check is read-then-insert; the
+        // unique index is what actually closes the concurrent-webhook race.
+        $svc = app(WalletService::class);
+        $wallet = $svc->forUser($this->makeUser());
+
+        WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'type' => WalletTransaction::TYPE_DEPOSIT,
+            'amount' => 5.0,
+            'reserved_delta' => 0,
+            'payment_source_ref' => 'race_ref_1',
+            'created_at' => now(),
+        ]);
+
+        $this->expectException(\Illuminate\Database\UniqueConstraintViolationException::class);
+
+        WalletTransaction::create([
+            'wallet_id' => $wallet->id,
+            'type' => WalletTransaction::TYPE_DEPOSIT,
+            'amount' => 5.0,
+            'reserved_delta' => 0,
+            'payment_source_ref' => 'race_ref_1',
+            'created_at' => now(),
+        ]);
+    }
+
     public function test_deposit_is_idempotent_by_payment_source_ref(): void
     {
         $svc = app(WalletService::class);

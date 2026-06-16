@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\Concerns;
 use App\Models\ApiToken;
 use App\Models\ApiTokenUsage;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Append-only audit log helper for the REST API. Every endpoint that lives
@@ -46,5 +48,36 @@ trait LogsApiUsage
         ]);
 
         return $response;
+    }
+
+    /**
+     * validate() that still writes an audit row on failure. A plain
+     * $request->validate() throws before logUsage() ever runs, so 422s were
+     * invisible in the token usage dashboard.
+     */
+    protected function validateLogged(
+        Request $request,
+        array $rules,
+        ApiToken $token,
+        string $endpoint,
+        float $startedAt,
+        ?int $chatId = null,
+    ): array {
+        try {
+            return $request->validate($rules);
+        } catch (ValidationException $e) {
+            ApiTokenUsage::create([
+                'api_token_id' => $token->id,
+                'chat_id' => $chatId,
+                'endpoint' => $endpoint,
+                'provider_cost' => 0,
+                'user_cost' => 0,
+                'response_time_ms' => (int) ((microtime(true) - $startedAt) * 1000),
+                'status' => ApiTokenUsage::STATUS_ERROR,
+                'created_at' => now(),
+            ]);
+
+            throw $e;
+        }
     }
 }

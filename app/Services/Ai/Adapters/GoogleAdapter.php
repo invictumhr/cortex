@@ -47,10 +47,10 @@ class GoogleAdapter extends AbstractAdapter
 
         $startedAt = microtime(true);
 
-        $response = Http::withHeaders([
+        $response = $this->withRetries(Http::withHeaders([
             'content-type' => 'application/json',
             'x-goog-api-key' => $this->apiKey(),
-        ])->timeout(180)->post($url, $payload);
+        ])->timeout(180))->post($url, $payload);
 
         $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
 
@@ -73,7 +73,7 @@ class GoogleAdapter extends AbstractAdapter
             inputTokens: (int) ($data['usageMetadata']['promptTokenCount'] ?? 0),
             outputTokens: (int) ($data['usageMetadata']['candidatesTokenCount'] ?? 0),
             model: $this->modelString(),
-            finishReason: $candidate['finishReason'] ?? 'stop',
+            finishReason: $this->normalizeFinishReason($candidate['finishReason'] ?? 'stop'),
             responseTimeMs: $elapsedMs,
             raw: is_array($data) ? $data : [],
         );

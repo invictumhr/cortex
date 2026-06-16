@@ -14,3 +14,23 @@ Schedule::command('cortex:wallet-reconcile')
     ->dailyAt('04:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+// Hourly orphan-reserve sweep — releases RESERVE rows whose job died before
+// settling. Reconciliation can't catch these (invariants still hold), so the
+// frozen funds would otherwise never return to the user's spendable balance.
+Schedule::command('cortex:wallet-release-stale')
+    ->hourly()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Housekeeping: failed_jobs rows older than a week have been triaged or never
+// will be — without pruning the table grows unbounded (payloads are big).
+Schedule::command('queue:prune-failed', ['--hours' => 168])
+    ->daily()
+    ->onOneServer();
+
+// Ephemeral architect personas with no messages and no chat are leftovers of
+// failed composer runs — sweep them weekly.
+Schedule::command('cortex:prune')
+    ->weekly()
+    ->onOneServer();

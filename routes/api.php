@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\ChatsController;
 use App\Http\Controllers\Api\DiscussController;
+use App\Http\Controllers\Api\MetaController;
 use App\Http\Controllers\Api\WalletController;
 use App\Models\ApiToken;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,14 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function () {
+    // ---- Roster discovery (any valid token, no scope required) --------------
+    // Clients need these to know which persona slugs / model strings the
+    // /discuss panel fields accept.
+    Route::middleware('api.token')->group(function () {
+        Route::get('/personas', [MetaController::class, 'personas'])->name('api.v1.personas');
+        Route::get('/models', [MetaController::class, 'models'])->name('api.v1.models');
+    });
+
     // ---- Discuss (kicks off a new boardroom) ---------------------------------
     Route::post('/discuss', DiscussController::class)
         ->middleware('api.token:'.ApiToken::SCOPE_DISCUSS)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\InsufficientFundsException;
+use App\Http\Controllers\Api\Concerns\HandlesIdempotency;
 use App\Http\Controllers\Api\Concerns\LogsApiUsage;
 use App\Http\Controllers\Controller;
 use App\Models\AiModel;
@@ -28,6 +29,7 @@ use Throwable;
  */
 class DiscussController extends Controller
 {
+    use HandlesIdempotency;
     use LogsApiUsage;
 
     public function __invoke(
@@ -42,7 +44,7 @@ class DiscussController extends Controller
         \assert($token instanceof ApiToken);
         $user = $token->user;
 
-        $validated = $request->validate([
+        $validated = $this->validateLogged($request, [
             'topic' => 'required|string|min:3|max:5000',
             // Three mutually-exclusive panel-init shapes — caller picks one.
             // Mode 1 (quick): just say how many agents you want; system picks models.
@@ -64,9 +66,17 @@ class DiscussController extends Controller
             'context' => 'nullable|string|max:50000',
             'constraints' => 'nullable|string|max:5000',
             'language' => 'nullable|string|size:2',
-        ]);
+        ], $token, 'POST /api/v1/discuss', $started);
 
         $rounds = (int) ($validated['rounds'] ?? 2);
+
+        // Optional Idempotency-Key header: a client retry with the same key
+        // replays the original 202 instead of billing a second boardroom.
+        // Claimed after validation so a 422 never locks the key.
+        $idemKey = $this->idempotencyKey($request, $token);
+        if ($replay = $this->beginIdempotent($idemKey)) {
+            return $replay;
+        }
 
         // Pre-flight balance check — refuse immediately if the wallet is
         // below the minimum so we don't create an empty chat and then fail
@@ -74,12 +84,12 @@ class DiscussController extends Controller
         $wallet = $wallets->forUser($user);
         $minFloor = (float) config('cortex.billing.min_send_balance', 0.05);
         if ($wallet->availableBalance() < $minFloor) {
-            return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
+            return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
                 response()->json([
                     'error' => 'insufficient_funds',
                     'available_eur' => round($wallet->availableBalance(), 6),
                     'min_send_eur' => $minFloor,
-                ], 402));
+                ], 402)));
         }
 
         // Resolve init mode from the request body — same precedence the CLI
@@ -110,8 +120,8 @@ class DiscussController extends Controller
             if ($initMode === Chat::INIT_CUSTOM) {
                 $this->attachCustomPanel($chat, $panelConfig);
                 if ($chat->personas()->count() === 0) {
-                    return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_ERROR, $started,
-                        response()->json(['error' => 'no_personas_resolved'], 422));
+                    return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_ERROR, $started,
+                        response()->json(['error' => 'no_personas_resolved'], 422)));
                 }
             }
 
@@ -121,20 +131,20 @@ class DiscussController extends Controller
             // progress (status flips to 'paused' when the turn is done).
             $orchestrator->sendUserMessage($chat, $user, $validated['topic']);
         } catch (InsufficientFundsException $e) {
-            return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
+            return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
                 response()->json([
                     'error' => 'insufficient_funds',
                     'available_eur' => round($e->available, 6),
                     'requested_eur' => round($e->requested, 6),
-                ], 402));
+                ], 402)));
         } catch (Throwable $e) {
             report($e);
 
-            return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_ERROR, $started,
-                response()->json(['error' => $e->getMessage()], 500));
+            return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_ERROR, $started,
+                response()->json(['error' => $e->getMessage()], 500)));
         }
 
-        return $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_OK, $started,
+        return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/discuss', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
                 'ok' => true,
                 'chat_id' => $chat->public_id,
@@ -144,7 +154,7 @@ class DiscussController extends Controller
                 'poll_url' => '/api/v1/chats/'.$chat->public_id,
             ], 202),
             chatId: $chat->id,
-        );
+        ));
     }
 
     /**

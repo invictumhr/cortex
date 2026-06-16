@@ -17,10 +17,20 @@ class AnthropicAdapter extends AbstractAdapter
 
     public function sendMessage(string $systemPrompt, array $messages, array $options = []): AiResponse
     {
+        // Prompt caching: the system block (persona prompt + boardroom rules +
+        // pinned context/constraints) is identical for the same persona across
+        // rounds, so an ephemeral cache breakpoint turns every round after the
+        // first into a 90%-discounted cache read. Below Anthropic's minimum
+        // cacheable size (1024/2048 tokens) the marker is silently ignored —
+        // no penalty either way.
+        $system = config('cortex.prompt_caching', true)
+            ? [['type' => 'text', 'text' => $systemPrompt, 'cache_control' => ['type' => 'ephemeral']]]
+            : $systemPrompt;
+
         $payload = [
             'model' => $this->modelString(),
             'max_tokens' => (int) ($options['max_tokens'] ?? 1500),
-            'system' => $systemPrompt,
+            'system' => $system,
             'messages' => $this->buildMessages($this->normalizeMessages($messages)),
         ];
 
@@ -32,11 +42,11 @@ class AnthropicAdapter extends AbstractAdapter
 
         $startedAt = microtime(true);
 
-        $response = Http::withHeaders([
+        $response = $this->withRetries(Http::withHeaders([
             'x-api-key' => $this->apiKey(),
             'anthropic-version' => '2023-06-01',
             'content-type' => 'application/json',
-        ])->timeout(180)->post($this->baseUrl().'/v1/messages', $payload);
+        ])->timeout(180))->post($this->baseUrl().'/v1/messages', $payload);
 
         $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
 
@@ -55,14 +65,24 @@ class AnthropicAdapter extends AbstractAdapter
             }
         }
 
+        // Anthropic's usage.input_tokens EXCLUDES cached tokens. Cache writes
+        // bill at 1.25× the input rate, cache reads at 0.1× — fold both into
+        // one input-equivalent so calculateCost() charges what Anthropic does.
+        $uncachedInput = (int) ($data['usage']['input_tokens'] ?? 0);
+        $cacheCreation = (int) ($data['usage']['cache_creation_input_tokens'] ?? 0);
+        $cacheRead = (int) ($data['usage']['cache_read_input_tokens'] ?? 0);
+
         return new AiResponse(
             content: trim($text),
-            inputTokens: (int) ($data['usage']['input_tokens'] ?? 0),
+            inputTokens: $uncachedInput + $cacheCreation + $cacheRead,
             outputTokens: (int) ($data['usage']['output_tokens'] ?? 0),
             model: $data['model'] ?? $this->modelString(),
-            finishReason: $data['stop_reason'] ?? 'stop',
+            finishReason: $this->normalizeFinishReason($data['stop_reason'] ?? 'stop'),
             responseTimeMs: $elapsedMs,
             raw: is_array($data) ? $data : [],
+            cacheCreationInputTokens: $cacheCreation,
+            cacheReadInputTokens: $cacheRead,
+            billableInputTokens: (int) ceil($uncachedInput + 1.25 * $cacheCreation + 0.1 * $cacheRead),
         );
     }
 

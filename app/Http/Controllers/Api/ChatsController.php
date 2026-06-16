@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Exceptions\InsufficientFundsException;
+use App\Http\Controllers\Api\Concerns\HandlesIdempotency;
 use App\Http\Controllers\Api\Concerns\LogsApiUsage;
 use App\Http\Controllers\Controller;
 use App\Models\ApiToken;
@@ -27,6 +28,7 @@ use Throwable;
  */
 class ChatsController extends Controller
 {
+    use HandlesIdempotency;
     use LogsApiUsage;
 
     public function __construct(
@@ -47,11 +49,11 @@ class ChatsController extends Controller
         $token = $this->token($request);
         $user = $token->user;
 
-        $validated = $request->validate([
+        $validated = $this->validateLogged($request, [
             'before' => ['nullable', 'date'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
             'include_archived' => ['nullable', 'boolean'],
-        ]);
+        ], $token, 'GET /api/v1/chats', $started);
 
         $limit = (int) ($validated['limit'] ?? 50);
 
@@ -65,11 +67,16 @@ class ChatsController extends Controller
             $query->where('updated_at', '<', $validated['before']);
         }
 
-        $chats = $query->limit($limit)->get([
+        // Fetch one extra row so the response can say whether another page
+        // exists without the client having to probe blindly.
+        $chats = $query->limit($limit + 1)->get([
             'id', 'public_id', 'title', 'status', 'init_mode', 'language',
             'total_messages', 'total_cost', 'current_round',
             'continuous', 'created_at', 'updated_at',
         ]);
+
+        $hasMore = $chats->count() > $limit;
+        $chats = $chats->take($limit);
 
         // Map public_id to the "id" field in the response — callers never see
         // the numeric id.
@@ -90,7 +97,8 @@ class ChatsController extends Controller
         return $this->logUsage($token, 'GET /api/v1/chats', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
                 'chats' => $mapped,
-                'next_before' => $chats->last()?->updated_at?->toIso8601String(),
+                'has_more' => $hasMore,
+                'next_before' => $hasMore ? $chats->last()?->updated_at?->toIso8601String() : null,
             ])
         );
     }
@@ -115,9 +123,9 @@ class ChatsController extends Controller
                 response()->json(['error' => 'forbidden'], 403), chatId: $chat->id);
         }
 
-        $validated = $request->validate([
+        $validated = $this->validateLogged($request, [
             'messages_after' => ['nullable', 'integer', 'min:0'],
-        ]);
+        ], $token, 'GET /api/v1/chats/{id}', $started, chatId: $chat->id);
 
         $messagesQ = $chat->messages()
             ->with(['persona:id,slug,name,title,avatar_emoji,avatar_color,is_scribe'])
@@ -183,12 +191,34 @@ class ChatsController extends Controller
                 response()->json(['error' => 'forbidden'], 403), chatId: $chat->id);
         }
 
-        $validated = $request->validate([
+        $validated = $this->validateLogged($request, [
             'content' => ['required', 'string', 'min:1', 'max:20000'],
             'language' => ['nullable', 'string', 'in:'.implode(',', LanguageDetector::supportedIsoCodes())],
             // Optional per-turn override. Default keeps whatever the chat already has.
             'rounds' => ['nullable', 'integer', 'min:1', 'max:'.config('cortex.max_rounds', 200)],
-        ]);
+        ], $token, 'POST /api/v1/chats/{id}/messages', $started, chatId: $chat->id);
+
+        // A bounded (non-continuous) chat that is still ACTIVE has a persona
+        // chain mid-flight — restarting the turn now would reset the round
+        // counter under the running chain and double-bill the round. Tell the
+        // caller to poll until the turn finishes.
+        if (! $chat->continuous && $chat->status === Chat::STATUS_ACTIVE) {
+            return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_ERROR, $started,
+                response()->json([
+                    'error' => 'discussion_running',
+                    'message' => 'The previous turn is still running. Poll the chat until status flips to "paused", then retry.',
+                    'poll_url' => '/api/v1/chats/'.$chat->public_id,
+                ], 409),
+                chatId: $chat->id,
+            );
+        }
+
+        // Optional Idempotency-Key header — a network-retry duplicate replays
+        // the original 202 instead of starting (and billing) a second turn.
+        $idemKey = $this->idempotencyKey($request, $token);
+        if ($replay = $this->beginIdempotent($idemKey)) {
+            return $replay;
+        }
 
         if (! empty($validated['language'])) {
             $resolved = LanguageDetector::fromIso($validated['language']);
@@ -206,41 +236,39 @@ class ChatsController extends Controller
         $wallet = $this->wallets->forUser($user);
         $minFloor = (float) config('cortex.billing.min_send_balance', 0.05);
         if ($wallet->availableBalance() < $minFloor) {
-            return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
+            return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
                 response()->json([
                     'error' => 'insufficient_funds',
                     'available_eur' => round($wallet->availableBalance(), 6),
                     'min_send_eur' => $minFloor,
                 ], 402),
                 chatId: $chat->id,
-            );
+            ));
         }
-
-        $lastIdBefore = (int) $chat->messages()->max('id');
 
         try {
             // Dispatch to the real queue — returns immediately after creating
             // the user message and kicking off the first persona job.
             $userMessage = $this->orchestrator->sendUserMessage($chat, $user, $validated['content']);
         } catch (InsufficientFundsException $e) {
-            return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
+            return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_INSUFFICIENT_FUNDS, $started,
                 response()->json([
                     'error' => 'insufficient_funds',
                     'available_eur' => round($e->available, 6),
                     'requested_eur' => round($e->requested, 6),
                 ], 402),
                 chatId: $chat->id,
-            );
+            ));
         } catch (Throwable $e) {
             report($e);
 
-            return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_ERROR, $started,
+            return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_ERROR, $started,
                 response()->json(['error' => $e->getMessage()], 500),
                 chatId: $chat->id,
-            );
+            ));
         }
 
-        return $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_OK, $started,
+        return $this->finishIdempotent($idemKey, $this->logUsage($token, 'POST /api/v1/chats/{id}/messages', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
                 'ok' => true,
                 'chat_id' => $chat->public_id,
@@ -250,7 +278,7 @@ class ChatsController extends Controller
             ], 202),
             chatId: $chat->id,
             chatMessageId: $userMessage->id,
-        );
+        ));
     }
 
     /**

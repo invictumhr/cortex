@@ -69,7 +69,10 @@ class PersonaResponder
         $response = $callResult['response'];
         $usedModel = $callResult['usedModel'];
 
-        $providerCost = (float) $usedModel->calculateCost($response->inputTokens, $response->outputTokens);
+        // billableInputTokens() folds provider cache pricing (write 1.25×,
+        // read 0.1×) into an input-equivalent; inputTokens stays the true
+        // context size for stats.
+        $providerCost = (float) $usedModel->calculateCost($response->billableInputTokens(), $response->outputTokens);
         $userCost = round($providerCost * $margin, 6);
 
         // Empty / filtered output gets logged as a non-billable persona row so
@@ -207,8 +210,10 @@ class PersonaResponder
 
         // Content filter refusals deliver tokens we don't want to bill — the
         // user didn't get usable output and the provider already charged us
-        // for almost nothing.
-        if (in_array($response->finishReason, ['content_filter', 'safety', 'blocked'], true)) {
+        // for almost nothing. Adapters normalize provider-specific reasons
+        // (SAFETY, refusal, blocklist, …) to 'content_filter'; the legacy
+        // aliases stay as defense-in-depth for un-normalized callers.
+        if (in_array(strtolower($response->finishReason), ['content_filter', 'safety', 'blocked'], true)) {
             return false;
         }
 

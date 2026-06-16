@@ -76,11 +76,11 @@ class WalletController extends Controller
         $token = $this->token($request);
         $user = $token->user;
 
-        $validated = $request->validate([
+        $validated = $this->validateLogged($request, [
             'before' => ['nullable', 'date'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
             'type' => ['nullable', 'string', 'in:DEPOSIT,RESERVE,RELEASE,DEBIT,REFUND,GRANT,ADJUSTMENT'],
-        ]);
+        ], $token, 'GET /api/v1/wallet/transactions', $started);
 
         $wallet = $this->wallets->forUser($user);
 
@@ -97,17 +97,22 @@ class WalletController extends Controller
             $query->where('created_at', '<', $validated['before']);
         }
 
-        $rows = $query->limit($limit)->get([
+        // One extra row tells us whether another page exists.
+        $rows = $query->limit($limit + 1)->get([
             'id', 'type', 'amount', 'reserved_delta',
             'source_type', 'source_id',
             'provider_cost', 'user_cost', 'metadata',
             'created_at',
         ]);
 
+        $hasMore = $rows->count() > $limit;
+        $rows = $rows->take($limit);
+
         return $this->logUsage($token, 'GET /api/v1/wallet/transactions', ApiTokenUsage::STATUS_OK, $started,
             response()->json([
-                'transactions' => $rows,
-                'next_before' => $rows->last()?->created_at?->toIso8601String(),
+                'transactions' => $rows->values(),
+                'has_more' => $hasMore,
+                'next_before' => $hasMore ? $rows->last()?->created_at?->toIso8601String() : null,
             ]),
         );
     }

@@ -20,15 +20,53 @@ class ChatMessageController extends Controller
         private WalletService $wallets,
     ) {}
 
+    /**
+     * JSON message feed for the chat page. Two access patterns:
+     *   ?after_id=N  — incremental fetch (Echo reconnect catch-up), ascending
+     *   ?before_id=N — older history page ("Load earlier"), ascending slice
+     *                  ending just before N
+     * Without parameters returns the newest page.
+     */
     public function index(Request $request, Chat $chat): JsonResponse
     {
         Gate::authorize('view', $chat);
 
-        return response()->json([
-            'messages' => $chat->messages()
-                ->with(['persona:id,name,title,avatar_emoji,avatar_color,is_scribe', 'attachments'])
+        $validated = $request->validate([
+            'after_id' => ['nullable', 'integer', 'min:0'],
+            'before_id' => ['nullable', 'integer', 'min:1'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:200'],
+        ]);
+
+        $limit = (int) ($validated['limit'] ?? 100);
+
+        $query = $chat->messages()
+            ->with(['persona:id,name,title,avatar_emoji,avatar_color,is_scribe', 'attachments']);
+
+        if (isset($validated['after_id'])) {
+            $rows = $query->where('id', '>', (int) $validated['after_id'])
                 ->orderBy('id')
-                ->get(),
+                ->limit($limit + 1)
+                ->get();
+
+            $hasMore = $rows->count() > $limit;
+
+            return response()->json([
+                'messages' => $rows->take($limit)->values(),
+                'has_more' => $hasMore,
+            ]);
+        }
+
+        if (! empty($validated['before_id'])) {
+            $query->where('id', '<', (int) $validated['before_id']);
+        }
+
+        // Newest page first, then flip to ascending for rendering.
+        $rows = $query->orderByDesc('id')->limit($limit + 1)->get();
+        $hasMore = $rows->count() > $limit;
+
+        return response()->json([
+            'messages' => $rows->take($limit)->reverse()->values(),
+            'has_more' => $hasMore,
         ]);
     }
 
@@ -100,7 +138,7 @@ class ChatMessageController extends Controller
         }
 
         // The user is on the page — keep the continuous loop alive.
-        Cache::put('cortex:heartbeat:'.$chat->id, true, 50);
+        Cache::put('cortex:heartbeat:'.$chat->id, true, ChatActionController::HEARTBEAT_TTL);
 
         try {
             $message = $this->orchestrator->sendUserMessage(

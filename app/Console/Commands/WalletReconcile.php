@@ -79,6 +79,7 @@ class WalletReconcile extends Command
             ], $broken),
         );
         Log::critical('[wallet-reconcile] drift detected', ['count' => count($broken), 'rows' => $broken]);
+        Log::channel('alerts')->critical('[wallet-reconcile] drift detected', ['count' => count($broken), 'rows' => $broken]);
 
         return self::FAILURE;
     }

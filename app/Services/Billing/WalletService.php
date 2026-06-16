@@ -148,13 +148,15 @@ class WalletService
         if ($reservedAmount > 0 && $actualUserCost > $reservedAmount * $poisonRatio) {
             // Drift past the safety multiplier — record it for ops review but
             // don't fail the call. Margin-drift exposure is on us, not the user.
-            Log::warning('[wallet] poison pill triggered', [
+            $context = [
                 'wallet_id' => $reserve->wallet_id,
                 'reserve_id' => $reserve->id,
                 'reserved' => $reservedAmount,
                 'actual' => $actualUserCost,
                 'ratio' => round($actualUserCost / $reservedAmount, 3),
-            ]);
+            ];
+            Log::warning('[wallet] poison pill triggered', $context);
+            Log::channel('alerts')->warning('[wallet] poison pill triggered', $context);
         }
 
         return DB::transaction(function () use ($reserve, $providerCost, $actualUserCost, $reservedAmount, $sourceType, $sourceId, $metadata) {
@@ -246,8 +248,10 @@ class WalletService
 
     /**
      * Top-up from an external payment processor. The `paymentSourceRef`
-     * (e.g. Paddle's transaction id) is indexed and used for idempotency —
-     * webhooks redeliver, and we don't want to apply the same payment twice.
+     * (e.g. Paddle's transaction id) carries a unique index and is used for
+     * idempotency — webhooks redeliver, and we don't want to apply the same
+     * payment twice. The read check below catches the common case cheaply;
+     * the unique index catches the concurrent-delivery race.
      */
     public function deposit(
         Wallet $wallet,
@@ -259,34 +263,43 @@ class WalletService
             throw new InvalidArgumentException('Deposit must be positive.');
         }
 
-        return DB::transaction(function () use ($wallet, $amount, $paymentSourceRef, $metadata) {
-            // Idempotency check — if a row with this payment ref already
-            // exists, return it instead of double-crediting.
-            $existing = WalletTransaction::where('payment_source_ref', $paymentSourceRef)
+        try {
+            return DB::transaction(function () use ($wallet, $amount, $paymentSourceRef, $metadata) {
+                // Idempotency check — if a row with this payment ref already
+                // exists, return it instead of double-crediting.
+                $existing = WalletTransaction::where('payment_source_ref', $paymentSourceRef)
+                    ->where('type', WalletTransaction::TYPE_DEPOSIT)
+                    ->first();
+                if ($existing) {
+                    return $existing;
+                }
+
+                $locked = Wallet::whereKey($wallet->id)->lockForUpdate()->first();
+                if (! $locked) {
+                    throw new RuntimeException("Wallet #{$wallet->id} disappeared mid-transaction.");
+                }
+
+                $locked->balance = (float) $locked->balance + $amount;
+                $locked->save();
+
+                return WalletTransaction::create([
+                    'wallet_id' => $locked->id,
+                    'type' => WalletTransaction::TYPE_DEPOSIT,
+                    'amount' => $amount,
+                    'reserved_delta' => 0,
+                    'payment_source_ref' => $paymentSourceRef,
+                    'metadata' => $metadata,
+                    'created_at' => now(),
+                ]);
+            });
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Lost the race against a concurrent delivery of the same payment —
+            // the winner's transaction committed; our credit rolled back. Return
+            // the winning row so the caller sees the same idempotent result.
+            return WalletTransaction::where('payment_source_ref', $paymentSourceRef)
                 ->where('type', WalletTransaction::TYPE_DEPOSIT)
-                ->first();
-            if ($existing) {
-                return $existing;
-            }
-
-            $locked = Wallet::whereKey($wallet->id)->lockForUpdate()->first();
-            if (! $locked) {
-                throw new RuntimeException("Wallet #{$wallet->id} disappeared mid-transaction.");
-            }
-
-            $locked->balance = (float) $locked->balance + $amount;
-            $locked->save();
-
-            return WalletTransaction::create([
-                'wallet_id' => $locked->id,
-                'type' => WalletTransaction::TYPE_DEPOSIT,
-                'amount' => $amount,
-                'reserved_delta' => 0,
-                'payment_source_ref' => $paymentSourceRef,
-                'metadata' => $metadata,
-                'created_at' => now(),
-            ]);
-        });
+                ->firstOrFail();
+        }
     }
 
     /**

@@ -81,7 +81,23 @@ class ChatOrchestrator
      */
     public function startRound(Chat $chat, int $turn, int $round): void
     {
-        $chat->update(['current_round' => $round]);
+        // Atomic round claim. Every caller passes round = current_round + 1
+        // (or 1 after a reset to 0), so a conditional UPDATE doubles as a
+        // dedup guard: if two concurrent flows (resume + heartbeat revival,
+        // double-click, queue redelivery) try to start the same round, only
+        // the first claim succeeds — the loser would otherwise dispatch a
+        // SECOND persona chain and double-bill the whole round.
+        $claimed = Chat::whereKey($chat->id)
+            ->where('current_round', '<', $round)
+            ->update(['current_round' => $round]);
+
+        if ($claimed === 0) {
+            Log::info("[orchestrator] startRound skipped — round {$round} already claimed for chat={$chat->id}");
+
+            return;
+        }
+
+        $chat->refresh();
 
         $speakerIds = $chat->activePersonas()
             ->where('is_scribe', false)

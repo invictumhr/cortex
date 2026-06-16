@@ -158,19 +158,39 @@ class AgentBriefing extends Page
 
         ## Endpoints — what you can call
 
+        ### GET `/api/v1/personas` — discover the persona roster
+
+        Returns every fixed persona: `slug`, `name`, `title`, `expertise_areas`, `role`
+        (debater / scribe / chair). Use the slugs in the `panel` / `personas` fields of
+        POST /discuss. Any valid token can call this — no scope needed.
+
+        ### GET `/api/v1/models` — discover usable models
+
+        Returns active models (`model_string`, `name`, `provider`, `supports_vision`).
+        Use the model strings in `models` / `panel[].model`. No scope needed.
+
         ### POST `/api/v1/discuss` — start a new boardroom
 
-        Synchronous. Returns the full chat with all messages produced by the run. Pick
-        **one** of the three panel-init modes:
+        **Asynchronous.** Returns `202 Accepted` immediately with the chat id and a
+        `poll_url` — the discussion runs in the background. Poll
+        `GET /api/v1/chats/{id}` until `chat.status` flips from `"active"` to
+        `"paused"`; that means the turn (personas + Scribe + Chair) is done.
+
+        Pick **one** of the three panel-init modes:
 
         - **Quick**: `agents: N` — system picks models + personas (recommended default)
         - **Custom models**: `models: ["gpt-4o", "claude-opus-4-7", ...]`
         - **Custom**: `panel: [{persona: "slug", model: "..."}, ...]` (advanced)
 
+        Send an **`Idempotency-Key` header** (any unique string, e.g. a UUID) so a
+        network-retry duplicate replays the original response instead of starting —
+        and billing — a second boardroom.
+
         ```bash
         curl {$base}/api/v1/discuss \\
           -H "Authorization: Bearer ctx_..." \\
           -H "Content-Type: application/json" \\
+          -H "Idempotency-Key: 7f3c1e2a-..." \\
           -d '{
             "topic": "Should we use Postgres or MongoDB for this project?",
             "agents": 3,
@@ -181,40 +201,39 @@ class AgentBriefing extends Page
           }'
         ```
 
-        Response shape:
+        Response shape (`202`):
 
         ```json
         {
           "ok": true,
-          "chat_id": 42,
-          "status": "paused",
-          "messages": [
-            { "role": "user",    "content": "..." },
-            { "role": "persona", "persona_id": 5, "content": "...", "user_cost": 0.04 },
-            { "role": "scribe",  "content": "<structured JSON summary>" },
-            { "role": "chair",   "content": "<one final verdict>" }
-          ],
-          "total_user_cost_eur": 0.23
+          "chat_id": "<64-char public id>",
+          "status": "active",
+          "title": "...",
+          "rounds": 1,
+          "poll_url": "/api/v1/chats/<public id>"
         }
         ```
 
         ### GET `/api/v1/chats` — list past discussions
 
         Newest first. Use `?limit=N` (max 100) and `?before=ISO8601` for pagination.
-        Pass `?include_archived=1` if you need archived too.
+        The response includes `has_more` — keep paging with `next_before` while it's
+        `true`. Pass `?include_archived=1` if you need archived too.
 
         ### GET `/api/v1/chats/{id}` — fetch a chat + messages
 
         Returns full transcript. Use `?messages_after=ID` to fetch only newer messages
-        for incremental updates.
+        for incremental polling.
 
         ### POST `/api/v1/chats/{id}/messages` — follow-up turn
 
-        Drop a new user message into an existing chat. Only the **new** messages from
-        this turn come back (not the full transcript).
+        Drop a new user message into an existing chat. Returns `202` + `poll_url` like
+        /discuss. Supports the same `Idempotency-Key` header. If the previous turn is
+        still running you get `409 discussion_running` — poll until `status` is
+        `"paused"`, then retry.
 
         ```bash
-        curl {$base}/api/v1/chats/42/messages \\
+        curl {$base}/api/v1/chats/<public id>/messages \\
           -H "Authorization: Bearer ctx_..." \\
           -H "Content-Type: application/json" \\
           -d '{"content": "What if we go option B instead?", "rounds": 1}'
@@ -328,9 +347,10 @@ class AgentBriefing extends Page
         | `402`  | Insufficient wallet balance          | Tell user to top up at `/user/redeem-code`                                  |
         | `403`  | Wrong scope or cross-user chat       | Ask user to issue a token with the required scope (in `required` field)     |
         | `404`  | Chat doesn't exist or was deleted    | Don't retry — the chat is gone                                              |
+        | `409`  | Turn still running / key in flight   | Poll the chat until `status` is `"paused"`, then retry                      |
         | `422`  | Validation error                     | Read `errors` map, fix the request                                          |
         | `429`  | Rate limit hit                       | Wait `retry_after_seconds`, then retry. **Do not retry-loop.**              |
-        | `500`  | Server error                         | **Do not retry blindly** — call `GET /chats` to see if a chat was created   |
+        | `500`  | Server error                         | Retry with the SAME `Idempotency-Key` — safe; without one, check `GET /chats` first |
 
         ---
 

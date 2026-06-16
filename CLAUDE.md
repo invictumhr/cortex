@@ -147,6 +147,19 @@ Plus instant `sendBeacon` na `chats/{id}/leave`. Eksplicitna pauza pokreće
   preskače za `claude-opus-4-[7-9]*`); Gemini Flash troši izlaz na "thinking" →
   adapter šalje `thinkingConfig.thinkingBudget=0`; OpenAI o-serija koristi
   `max_completion_tokens` i bez temperature.
+- **Retry/backoff:** transijentne greške (connection, 408/429/5xx) retry-aju
+  se na ISTOM modelu (`AbstractAdapter::withRetries`, backoff iz
+  `cortex.provider_retry_backoff_ms`, default 1s+4s = 3 pokušaja) prije nego
+  fallback model preuzme. 4xx se NE retry-a.
+- **finish_reason normalizacija:** svi adapteri mapiraju provider-specifične
+  reasone u kanonske (`stop|max_tokens|content_filter|tool_use`) — kritično za
+  is_billable check (Gemini vraća uppercase `SAFETY`).
+- **Prompt caching (Anthropic):** system blok dobiva `cache_control: ephemeral`
+  (gasi se s `CORTEX_PROMPT_CACHING=false`). ContextBuilder zato drži pinned
+  KONTEKST/OGRANIČENJA u system promptu (round-invariant prefix) — svaki krug
+  nakon prvog je cache read (10% input cijene). Cost računica koristi
+  `AiResponse::billableInputTokens()` (write 1.25×, read 0.1× foldano u
+  input-ekvivalent); `inputTokens` ostaje pravi ukupni kontekst za statistiku.
 
 ## Persone
 
@@ -198,6 +211,16 @@ Mental model:
 - `balance + reserved_balance == sum(amount)` za sve transakcije walleta
 - `reserved_balance == sum(reserved_delta)`
 
+**Orphan RESERVE sweep** (`cortex:wallet-release-stale`, scheduled hourly):
+RESERVE stariji od 6h bez DEBIT/RELEASE childa = job umro između reserve i
+settle → sweep ga release-a natrag u spendable. Bitno: reconcile invariante
+ovo NE hvataju (obje i dalje vrijede za orphan), zato postoji zaseban sweep.
+Flagovi: `--hours=N`, `--dry-run`. Loga u `alerts` log channel.
+
+**`payment_source_ref` je UNIQUE index** — idempotencija depozita je enforced
+na DB razini; `deposit()` hvata `UniqueConstraintViolationException` i vraća
+pobjednički red (concurrent webhook redelivery safe).
+
 **Snapshot pricing**: pri `reserve()` se kopira AiModel-ova cijena per 1M
 tokens (`rate_input_snapshot`, `rate_output_snapshot`, `provider_id`) — debit
 uvijek koristi snapshotanu cijenu, ne live. Margin drift apsorbira Cortex.
@@ -207,6 +230,9 @@ TTL je u config (`rate_snapshot_ttl_hours`, default 6h — kraće od originalnih
 **`is_billable` strict criteria** (postavlja PersonaResponder/Scribe/Chair):
 true SAMO ako `output_tokens > 0 AND finish_reason ∉ ['content_filter', 'safety', 'blocked']`.
 Sve drugo (prazan stream, refusal) → `release()` umjesto `commitDebit()`.
+Adapteri normaliziraju provider-specifične finish reasone u kanonski rječnik
+(`stop|max_tokens|content_filter|tool_use`, `AbstractAdapter::normalizeFinishReason`)
+— bez toga bi Geminijev uppercase `SAFETY` prošao blocklist i bio naplaćen.
 
 **Free credit logika** (Opcija B iz design-a):
 1. Registracija → `Registered` event → user kreiran s IP/UA hash (RegisteredUserController)
@@ -239,21 +265,26 @@ Sve drugo (prazan stream, refusal) → `release()` umjesto `commitDebit()`.
 
 ## REST API (`routes/api.php` + `app/Http/Controllers/Api/`)
 
-Eight endpoints, scope-gated. Tokens su izdani iz `/user/api-tokens` (plaintext
+Ten endpoints, scope-gated. Tokens su izdani iz `/user/api-tokens` (plaintext
 prikazan jednom). Auth header: `Authorization: Bearer ctx_...`.
 
 | Method | Path                                    | Scope                  | Action |
 |--------|-----------------------------------------|------------------------|--------|
-| POST   | `/api/v1/discuss`                       | `cortex:discuss`       | Pokreće novi boardroom; tijelo `{topic, agents?\|models?\|panel?, rounds?, title?, context?, constraints?, language?}`. Vraća chat + sve poruke + cost split. |
-| GET    | `/api/v1/chats`                         | `cortex:chats.read`    | Lista chatova (newest-first). Query: `before` (ISO8601 za stranicu), `limit` (max 100), `include_archived=1`. |
+| GET    | `/api/v1/personas`                      | (bilo koji valjan token) | Roster fiksnih persona: slug, name, title, expertise_areas, role (debater/scribe/chair). Slugovi za `panel`/`personas` polja. |
+| GET    | `/api/v1/models`                        | (bilo koji valjan token) | Aktivni modeli s upotrebljivim providerom: model_string, name, provider, supports_vision, max_context_tokens. Cijene se NE izlažu. |
+| POST   | `/api/v1/discuss`                       | `cortex:discuss`       | **Async**: pokreće boardroom, vraća `202` + `chat_id` (public_id) + `poll_url`; klijent polla GET /chats/{id} dok `status` ne flipne na `paused`. Tijelo `{topic, agents?\|models?\|panel?, rounds?, title?, context?, constraints?, language?}`. Podržava **`Idempotency-Key` header** (24h TTL, per-token) — retry s istim ključem replaya originalni odgovor umjesto duple naplate. |
+| GET    | `/api/v1/chats`                         | `cortex:chats.read`    | Lista chatova (newest-first). Query: `before` (ISO8601 za stranicu), `limit` (max 100), `include_archived=1`. Response uključuje `has_more` + `next_before`. |
 | GET    | `/api/v1/chats/{id}`                    | `cortex:chats.read`    | Pun chat + personas + poruke + scribe summaries. Query `messages_after=ID` za incremental fetch. |
-| POST   | `/api/v1/chats/{id}/messages`           | `cortex:chats.write`   | Follow-up poruka u tekuću raspravu. Sync queue; vraća samo NOVE poruke iz turna + cost split. Opcionalni `language` (ISO 639-1) updejta chat language real-time. |
+| POST   | `/api/v1/chats/{id}/messages`           | `cortex:chats.write`   | Follow-up poruka; `202` + `poll_url`. Podržava `Idempotency-Key`. Ako bounded chat ima turn u tijeku → `409 discussion_running`. Opcionalni `language` (ISO 639-1) updejta chat language real-time. |
 | POST   | `/api/v1/chats/{id}/archive`            | `cortex:chats.write`   | `status` → `archived`; mirror web archive. |
 | DELETE | `/api/v1/chats/{id}`                    | `cortex:chats.write`   | Hard delete s FK cascade — bespovratno. |
 | GET    | `/api/v1/wallet`                        | `cortex:wallet.read`   | `{balance, reserved, available, currency, spend_30d, margin_multiplier, tier, low_warning_threshold, min_send_balance, topup_url}`. |
-| GET    | `/api/v1/wallet/transactions`           | `cortex:wallet.read`   | Ledger pagination. Query: `type` (DEBIT/DEPOSIT/…), `before`, `limit` (max 200). |
+| GET    | `/api/v1/wallet/transactions`           | `cortex:wallet.read`   | Ledger pagination. Query: `type` (DEBIT/DEPOSIT/…), `before`, `limit` (max 200). Response uključuje `has_more`. |
 
-Status kodovi: `200` ok · `401` invalid/missing/revoked token · `403` `scope_required` ili `forbidden` (cross-user chat) · `402` `insufficient_funds` · `422` validation error · `429` `rate_limited` (s `retry_after_seconds`) · `500` server error.
+Status kodovi: `200` ok · `202` accepted (async discuss/messages) · `401` invalid/missing/revoked token · `403` `scope_required` ili `forbidden` (cross-user chat) · `402` `insufficient_funds` · `409` `discussion_running` ili `idempotency_conflict` · `422` validation error · `429` `rate_limited` (s `retry_after_seconds`) · `500` server error.
+
+Idempotency je implementiran u `Api\Concerns\HandlesIdempotency` (cache-based,
+claim preko `Cache::add`, uspjeh se sprema 24h, fail oslobađa ključ za retry).
 
 - **`AuthenticateApiToken` middleware** (`api.token` alias):
   - Extract Bearer `ctx_…` → hash → lookup `api_tokens.token_hash`
@@ -275,7 +306,8 @@ Status kodovi: `200` ok · `401` invalid/missing/revoked token · `403` `scope_r
 - **Logging** (`App\Http\Controllers\Api\Concerns\LogsApiUsage` trait): svaki
   endpoint piše JEDAN red u `api_token_usages` (chat_id, chat_message_id,
   endpoint, provider_cost, user_cost, response_time_ms, status enum
-  `ok|rate_limited|insufficient_funds|error`). Cross-user 403, validation 422,
+  `ok|rate_limited|insufficient_funds|error`). Cross-user 403, validation 422
+  (kroz `validateLogged()` helper — običan `validate()` bi bacio prije loga),
   insufficient funds 402 — sve loga.
 - **Cross-user izolacija:** sve `/chats/{id}` rute provjeravaju
   `chat->user_id === token->user_id` u controlleru i vraćaju `403 forbidden`
@@ -313,6 +345,9 @@ Status kodovi: `200` ok · `401` invalid/missing/revoked token · `403` `scope_r
   PIN-ova, plaintext printan jednom.
 - `cortex:wallet-reconcile [--tolerance=0.01]` — daily integrity check; exit
   `FAILURE` s tablicom drift-a ako razlika premaši tolerance.
+- `cortex:wallet-release-stale [--hours=6] [--dry-run]` — hourly sweep za
+  orphan RESERVE retke (job umro između reserve i settle); release-a smrznuta
+  sredstva natrag u spendable.
 - `cortex-feedback <chat> <1-5>` (`--used` = stvarno implementirane ideje),
   `cortex-benchmark "<tema>"` (boardroom vs jedan jak model + slijepi ocjenjivač),
   `cortex-knowledge`, `cortex:personas`, `cortex:prune` (briše orphane ephemeral
@@ -336,6 +371,14 @@ Status kodovi: `200` ok · `401` invalid/missing/revoked token · `403` `scope_r
   - Persona drawer (`PersonaInfoPanel`) klizi s desne strane (Personas button u header)
   - **Slanje poruke** šalje `language` field iz UI toggle-a → backend re-aligna
     `chat->language` real-time (sljedeća persona u novom jeziku)
+  - **Paginacija transcripta**: inicijalno se učitava zadnjih 100 poruka
+    (`hasEarlierMessages` prop); "Učitaj ranije poruke" gumb dovlači starije
+    stranice kroz `GET /chats/{id}/messages?before_id=…` (JSON feed podržava
+    i `after_id` za incremental fetch). Heartbeat TTL je 120 s (ping 20 s →
+    5 propuštenih pinga tolerancije).
+  - **Echo reconnect catch-up**: na svaki `connected` event WebSocket veze
+    UI refetcha propuštene poruke (`after_id` = zadnji viđeni ID) — pad
+    Reverba/mreže više ne ostavlja zamrznuti transcript.
 - **i18n** (`resources/js/i18n/`) — HR/EN UI translations (`translations.js`),
   `I18nProvider` + `useT()` hook, `LanguageToggle` komponenta. Preferencija u
   `localStorage.cortex.lang`, inicijalno iz `navigator.language`.
@@ -479,6 +522,14 @@ Navigation grupe: **Account** / **Billing** / **Developers**.
 `benchmark_control_model` + `benchmark_evaluator_model`, `deliberation_language`,
 **`output_language` (default `English`, ne više `Croatian`)**, `kill_switch_key`.
 
+### Resilience/cost ključevi
+- `context_token_budget` (24000) — hard cap na sastavljeni transcript kontekst
+  u ~tokenima (4 znaka/token, floor 4000 znakova); najstarije linije se režu
+  prve, pinned blok i scribe sažetak nikad.
+- `prompt_caching` (true) — Anthropic `cache_control` na system bloku.
+- `provider_retry_backoff_ms` ('1000,4000' CSV) — backoff za transijentne
+  provider greške; prazan string gasi retry.
+
 ### Novi blokovi
 - **`cortex.billing`**:
   - `margin_hobby` (2.0), `margin_enterprise` (1.7), `enterprise_threshold_eur` (100)
@@ -490,15 +541,23 @@ Navigation grupe: **Account** / **Billing** / **Developers**.
   - `low_balance_warning` (0.50) — UI banner threshold
 - **`cortex.paddle`** (postoji ali neaktivan u V1):
   - `vendor_id`, `webhook_secret`, `topup_tiers[]` (5/10/25/50 EUR price_id mapiranje)
-- **`cortex.api_rate_limit`**: `per_day` (50), `per_hour` (10), `concurrent` (3)
+- **`cortex.api_rate_limit`**: `per_minute` (10), `per_hour` (50)
 
 Sve podesivo preko `CORTEX_*` env varijabli.
 
 ## Reconciliation & scheduled tasks (`routes/console.php`)
 
-- **`Schedule::command('cortex:wallet-reconcile')->dailyAt('04:00')->withoutOverlapping()->onOneServer()`**
-- Provjerava obje invariante za sve walleta; alert ako drift > €0.01 tolerance.
+- **`cortex:wallet-reconcile`** — dailyAt 04:00, withoutOverlapping, onOneServer.
+  Provjerava obje invariante za sve walleta; alert ako drift > €0.01 tolerance.
   Exit `FAILURE` ako bilo koji wallet ne prolazi.
+- **`cortex:wallet-release-stale`** — hourly; release orphan RESERVE retke
+  (>6h bez settlementa). Loga u `alerts` channel.
+- **`queue:prune-failed --hours=168`** — daily; failed_jobs stariji od tjedan
+  dana se brišu (payloadi su veliki, tablica bi rasla unbounded).
+- **`cortex:prune`** — weekly; orphan ephemeral persone.
+- **Alerts log channel** (`config/logging.php` → `alerts`): poison pill,
+  reconcile drift i stale-reserve sweep pišu i u `storage/logs/alerts-*.log`
+  (90 dana retencije) — ops surface odvojen od laravel.log šuma.
 - **Treba** Windows Task Scheduler ili Linux cron koji svake minute pokreće
   `php artisan schedule:run` (inače cron nikad ne okine). Production deployment
   step.
@@ -516,6 +575,9 @@ Sve podesivo preko `CORTEX_*` env varijabli.
   ili kroz web na 8888. Migracije: `php artisan migrate`; nakon izmjene seedera
   — `php artisan db:seed --class=...`.
 - Nakon izmjene `.env`/configa: `php artisan config:clear`.
+- **Brisanje chata/usera čisti i datoteke**: FK cascade briše retke bez
+  Eloquent eventova, pa `Chat::deleting` i `User::deleting` hookovi brišu
+  `chat-attachments/{chatId}/` direktorije s diska (GDPR completeness).
 - **Testovi NE smiju koristiti dev DB** — `phpunit.xml` forsira `DB_CONNECTION=sqlite`
   + `DB_DATABASE=:memory:` (RefreshDatabase trait bi inače wipe-ao cortex bazu).
 - **Filament + MySQL `only_full_group_by`**: Eloquent query s GROUP BY (npr.
@@ -533,3 +595,7 @@ Sve podesivo preko `CORTEX_*` env varijabli.
   direktno; uvijek kroz `WalletService` — invariante to pretpostavljaju.
 - **Inertia shared `wallet` prop** je live na svaki request — frontend ga čita
   preko `usePage().props.wallet` (refresh balance bez puno reactive plumbing).
+
+## SSH / Produkcijski server
+
+Produkcijski server konfiguriran je u `~/.ssh/config` (sekcija `# BEGIN cortex`): alias `cortex-web-1` → `[redacted-ip]` (Hetzner, javni IP, direktan SSH bez VPN-a). Ključ `~/.ssh/id_ed25519`. Helper: `Invoke-OnProject cortex 'cmd'` (inventory: `~/invictum/inventory/cortex.yml`). Detalji u globalnom `~/.claude/CLAUDE.md` → "Cortex — SSH pristup serverima".

@@ -73,6 +73,18 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Ops alert surface: billing drift, poison pills, orphaned reserves.
+        // A separate long-retention file so the signals that need a human
+        // never drown in laravel.log noise. Point a log shipper / Slack
+        // forwarder at this file (or swap the driver) when going production.
+        'alerts' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/alerts.log'),
+            'level' => 'warning',
+            'days' => env('LOG_ALERTS_DAYS', 90),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

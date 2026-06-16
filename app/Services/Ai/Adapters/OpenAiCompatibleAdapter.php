@@ -50,8 +50,7 @@ class OpenAiCompatibleAdapter extends AbstractAdapter
 
         $startedAt = microtime(true);
 
-        $response = Http::withToken($this->apiKey())
-            ->timeout(180)
+        $response = $this->withRetries(Http::withToken($this->apiKey())->timeout(180))
             ->post($this->baseUrl().'/v1/chat/completions', $payload);
 
         $elapsedMs = (int) round((microtime(true) - $startedAt) * 1000);
@@ -70,7 +69,7 @@ class OpenAiCompatibleAdapter extends AbstractAdapter
             inputTokens: (int) ($data['usage']['prompt_tokens'] ?? 0),
             outputTokens: (int) ($data['usage']['completion_tokens'] ?? 0),
             model: $data['model'] ?? $this->modelString(),
-            finishReason: $choice['finish_reason'] ?? 'stop',
+            finishReason: $this->normalizeFinishReason($choice['finish_reason'] ?? 'stop'),
             responseTimeMs: $elapsedMs,
             raw: is_array($data) ? $data : [],
         );

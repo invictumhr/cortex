@@ -194,7 +194,7 @@ class CortexBenchmark extends Command
         return [
             'model' => $model->model_string,
             'answer' => trim((string) $response->content),
-            'cost' => $model->calculateCost($response->inputTokens, $response->outputTokens),
+            'cost' => $model->calculateCost($response->billableInputTokens(), $response->outputTokens),
             'elapsed' => round(microtime(true) - $startedAt, 1),
         ];
     }

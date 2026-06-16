@@ -11,6 +11,7 @@ import { useT } from '@/i18n/I18nProvider';
 export default function Show({
     chat: initialChat,
     messages: initialMessages,
+    hasEarlierMessages = false,
     allPersonas,
     chats,
     powershellEnabled,
@@ -23,12 +24,20 @@ export default function Show({
     const [sending, setSending] = useState(false);
     const [showPs, setShowPs] = useState(false);
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [hasEarlier, setHasEarlier] = useState(hasEarlierMessages);
+    const [loadingEarlier, setLoadingEarlier] = useState(false);
 
     const scrollRef = useRef(null);
     const seenIds = useRef(new Set(initialMessages.map((m) => m.id)));
     const animateIds = useRef(new Set());
+    // Prepending older history must not yank the viewport to the bottom.
+    const skipNextAutoScroll = useRef(false);
 
     useEffect(() => {
+        if (skipNextAutoScroll.current) {
+            skipNextAutoScroll.current = false;
+            return;
+        }
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
     }, [messages, typing]);
 
@@ -65,8 +74,52 @@ export default function Show({
         return () => window.Echo.leave(`chat.${chat.id}`);
     }, [chat.id]);
 
+    // WebSocket drop = missed broadcasts. On every (re)connect, catch up via
+    // the JSON feed from the newest message we've actually seen — the initial
+    // connect fetches nothing extra, a reconnect pulls in whatever Echo missed.
     useEffect(() => {
-        const ping = () => window.axios.post(`/chats/${chat.id}/heartbeat`).catch(() => {});
+        const conn = window.Echo?.connector?.pusher?.connection;
+        if (!conn) return;
+        const catchUp = () => {
+            const lastId = seenIds.current.size ? Math.max(...seenIds.current) : 0;
+            window.axios
+                .get(`/chats/${chat.id}/messages`, { params: { after_id: lastId } })
+                .then(({ data }) => {
+                    const fresh = (data.messages ?? []).filter((m) => !seenIds.current.has(m.id));
+                    if (!fresh.length) return;
+                    fresh.forEach((m) => seenIds.current.add(m.id));
+                    setMessages((prev) => [...prev, ...fresh]);
+                })
+                .catch(() => {});
+        };
+        conn.bind('connected', catchUp);
+        return () => conn.unbind('connected', catchUp);
+    }, [chat.id]);
+
+    const loadEarlier = async () => {
+        if (loadingEarlier || !messages.length) return;
+        setLoadingEarlier(true);
+        try {
+            const { data } = await window.axios.get(`/chats/${chat.id}/messages`, {
+                params: { before_id: messages[0].id, limit: 100 },
+            });
+            const older = (data.messages ?? []).filter((m) => !seenIds.current.has(m.id));
+            older.forEach((m) => seenIds.current.add(m.id));
+            if (older.length) {
+                skipNextAutoScroll.current = true;
+                setMessages((prev) => [...older, ...prev]);
+            }
+            setHasEarlier(Boolean(data.has_more));
+        } catch {
+            // Leave the button visible so the user can retry.
+        } finally {
+            setLoadingEarlier(false);
+        }
+    };
+
+    useEffect(() => {
+        const ping = () => window.axios.post(`/chats/${chat.id}/heartbeat`)
+            .catch((err) => console.warn('[cortex] heartbeat failed', err?.message));
         const leave = () => navigator.sendBeacon(`/chats/${chat.id}/leave`);
         ping();
         const timer = setInterval(ping, 20000);
@@ -123,11 +176,13 @@ export default function Show({
 
     const pause = () => {
         setChat((c) => ({ ...c, status: 'paused' }));
-        window.axios.post(`/chats/${chat.id}/pause`).catch(() => {});
+        window.axios.post(`/chats/${chat.id}/pause`)
+            .catch((err) => console.warn('[cortex] pause failed', err?.message));
     };
     const resume = () => {
         setChat((c) => ({ ...c, status: 'active' }));
-        window.axios.post(`/chats/${chat.id}/resume`).catch(() => {});
+        window.axios.post(`/chats/${chat.id}/resume`)
+            .catch((err) => console.warn('[cortex] resume failed', err?.message));
     };
 
     const running = chat.status === 'active';
@@ -208,6 +263,19 @@ export default function Show({
                     >
                         <div className="mx-auto max-w-3xl space-y-4 px-4 py-4 sm:space-y-6 sm:px-6 sm:py-8">
                             <BalanceBanner />
+
+                            {hasEarlier && (
+                                <div className="flex justify-center">
+                                    <button
+                                        onClick={loadEarlier}
+                                        disabled={loadingEarlier}
+                                        className="btn-ghost text-xs"
+                                        aria-label={t('show.loadEarlier')}
+                                    >
+                                        {loadingEarlier ? '…' : t('show.loadEarlier')}
+                                    </button>
+                                </div>
+                            )}
 
                             {messages.length === 0 && (
                                 <div className="flex h-[60vh] flex-col items-center justify-center text-center">

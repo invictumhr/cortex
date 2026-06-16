@@ -10,15 +10,17 @@ class ProfileTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_profile_page_is_displayed(): void
+    public function test_profile_page_redirects_to_filament_panel(): void
     {
+        // The Breeze profile page was replaced by the Filament user panel;
+        // the old URL stays alive as a redirect for bookmarks and old emails.
         $user = User::factory()->create();
 
         $response = $this
             ->actingAs($user)
             ->get('/profile');
 
-        $response->assertOk();
+        $response->assertRedirect('/user/profile');
     }
 
     public function test_profile_information_can_be_updated(): void
