@@ -595,7 +595,3 @@ Sve podesivo preko `CORTEX_*` env varijabli.
   direktno; uvijek kroz `WalletService` — invariante to pretpostavljaju.
 - **Inertia shared `wallet` prop** je live na svaki request — frontend ga čita
   preko `usePage().props.wallet` (refresh balance bez puno reactive plumbing).
-
-## SSH / Produkcijski server
-
-Produkcijski server konfiguriran je u `~/.ssh/config` (sekcija `# BEGIN cortex`): alias `cortex-web-1` → `[redacted-ip]` (Hetzner, javni IP, direktan SSH bez VPN-a). Ključ `~/.ssh/id_ed25519`. Helper: `Invoke-OnProject cortex 'cmd'` (inventory: `~/invictum/inventory/cortex.yml`). Detalji u globalnom `~/.claude/CLAUDE.md` → "Cortex — SSH pristup serverima".
