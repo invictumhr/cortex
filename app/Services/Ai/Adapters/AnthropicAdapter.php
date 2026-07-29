@@ -34,10 +34,22 @@ class AnthropicAdapter extends AbstractAdapter
             'messages' => $this->buildMessages($this->normalizeMessages($messages)),
         ];
 
-        // Opus 4.7+ rejects the `temperature` parameter.
-        $rejectsTemperature = preg_match('/^claude-opus-4-[7-9]/', $this->modelString());
-        if (isset($options['temperature']) && ! $rejectsTemperature) {
+        // Opus 4.7+ and the whole Claude 5 generation (Opus 5, Sonnet 5,
+        // Fable/Mythos 5) reject the `temperature` parameter with a 400.
+        if (isset($options['temperature']) && ! $this->rejectsTemperature()) {
             $payload['temperature'] = (float) $options['temperature'];
+        }
+
+        // Claude 5 Opus/Sonnet run adaptive thinking BY DEFAULT, and thinking
+        // tokens bill as output while eating the max_tokens budget — a 1200
+        // token boardroom turn would come back mostly-thinking and truncated.
+        // Explicitly disable it (accepted at the default effort level) so the
+        // whole budget goes to the visible contribution, matching how the 4.x
+        // personas behave. Fable/Mythos 5 reject `disabled`, so they are
+        // deliberately excluded — don't route boardroom personas there without
+        // revisiting this.
+        if (preg_match('/^claude-(opus|sonnet)-[5-9]/', $this->modelString())) {
+            $payload['thinking'] = ['type' => 'disabled'];
         }
 
         $startedAt = microtime(true);
@@ -83,6 +95,18 @@ class AnthropicAdapter extends AbstractAdapter
             cacheCreationInputTokens: $cacheCreation,
             cacheReadInputTokens: $cacheRead,
             billableInputTokens: (int) ceil($uncachedInput + 1.25 * $cacheCreation + 0.1 * $cacheRead),
+        );
+    }
+
+    /**
+     * Models that 400 on the `temperature` parameter: Opus 4.7/4.8/4.9 and
+     * every Claude 5+ model (opus-5, sonnet-5, fable-5, mythos-5, …).
+     */
+    private function rejectsTemperature(): bool
+    {
+        return (bool) preg_match(
+            '/^claude-(opus-4-[7-9]|opus-[5-9]|sonnet-[5-9]|fable-|mythos-)/',
+            $this->modelString(),
         );
     }
 

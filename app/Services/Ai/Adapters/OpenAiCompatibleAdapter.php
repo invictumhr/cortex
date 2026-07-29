@@ -24,6 +24,17 @@ class OpenAiCompatibleAdapter extends AbstractAdapter
         return $this->model->provider?->name ?? 'OpenAI-compatible';
     }
 
+    /**
+     * Provider-specific payload additions (e.g. xAI's reasoning_effort).
+     * Subclasses override; base OpenAI adds nothing here.
+     *
+     * @return array<string, mixed>
+     */
+    protected function extraPayload(): array
+    {
+        return [];
+    }
+
     public function sendMessage(string $systemPrompt, array $messages, array $options = []): AiResponse
     {
         $chatMessages = [['role' => 'system', 'content' => $systemPrompt]];
@@ -37,9 +48,22 @@ class OpenAiCompatibleAdapter extends AbstractAdapter
             'messages' => $chatMessages,
         ];
 
-        // OpenAI o-series reasoning models require max_completion_tokens and reject temperature.
-        if (preg_match('/^o\d/', $this->modelString())) {
+        // OpenAI reasoning-capable models (o-series AND the whole gpt-5.x
+        // family) require max_completion_tokens and reject temperature/top_p
+        // with a 400. Before gpt-5 was added here, every persona on gpt-5.x
+        // silently failed and ran on the fallback model instead.
+        if (preg_match('/^(o\d|gpt-5)/', $this->modelString())) {
             $payload['max_completion_tokens'] = (int) ($options['max_tokens'] ?? 1500);
+
+            // gpt-5.x defaults reasoning_effort to medium; hidden reasoning
+            // tokens bill as output AND eat the completion budget. Low keeps
+            // short boardroom contributions cheap and un-truncated. (Not sent
+            // to the o-series — o3 has run fine on its defaults. Empty config
+            // value disables sending the parameter.)
+            $effort = trim((string) config('cortex.openai_reasoning_effort', 'low'));
+            if ($effort !== '' && str_starts_with($this->modelString(), 'gpt-5')) {
+                $payload['reasoning_effort'] = $effort;
+            }
         } else {
             $payload['max_tokens'] = (int) ($options['max_tokens'] ?? 1500);
 
@@ -47,6 +71,8 @@ class OpenAiCompatibleAdapter extends AbstractAdapter
                 $payload['temperature'] = (float) $options['temperature'];
             }
         }
+
+        $payload = array_merge($payload, $this->extraPayload());
 
         $startedAt = microtime(true);
 

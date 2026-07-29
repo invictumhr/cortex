@@ -26,14 +26,23 @@ class GoogleAdapter extends AbstractAdapter
             'maxOutputTokens' => (int) ($options['max_tokens'] ?? 1500),
         ];
 
-        // Gemini 2.5 Flash spends the output budget on internal "thinking",
-        // which truncates the visible answer; disable it so the whole budget
-        // goes to the reply.
-        if (str_contains($this->modelString(), 'flash')) {
+        // Thinking eats the output budget and truncates the visible answer,
+        // so it gets clamped down. The knob differs by generation:
+        //  - Gemini 3.x uses thinkingLevel (minimal|low|medium|high); sending
+        //    the legacy thinkingBudget alongside it returns a 400. There is
+        //    no full "off" on 3.x — minimal is the floor.
+        //  - Gemini 2.x flash still uses thinkingBudget: 0 (2.x pro cannot
+        //    disable thinking at all, so it gets nothing).
+        if ($this->isGenerationThreePlus()) {
+            $generationConfig['thinkingConfig'] = ['thinkingLevel' => 'minimal'];
+        } elseif (str_contains($this->modelString(), 'flash')) {
             $generationConfig['thinkingConfig'] = ['thinkingBudget' => 0];
         }
 
-        if (isset($options['temperature'])) {
+        // Gemini 3.x deprecates temperature/top_p/top_k — ignored today,
+        // documented to become a hard 400 on future generations. Only 2.x
+        // still gets the configured temperature.
+        if (isset($options['temperature']) && ! $this->isGenerationThreePlus()) {
             $generationConfig['temperature'] = (float) $options['temperature'];
         }
 
@@ -77,6 +86,12 @@ class GoogleAdapter extends AbstractAdapter
             responseTimeMs: $elapsedMs,
             raw: is_array($data) ? $data : [],
         );
+    }
+
+    /** Gemini 3.0+ (gemini-3-*, gemini-3.1-*, gemini-3.5-*, gemini-3.6-*, …). */
+    private function isGenerationThreePlus(): bool
+    {
+        return (bool) preg_match('/^gemini-(?:[3-9]|\d{2,})/', $this->modelString());
     }
 
     /**

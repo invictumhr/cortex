@@ -143,10 +143,26 @@ Plus instant `sendBeacon` na `chats/{id}/leave`. Eksplicitna pauza pokreće
 - API ključevi u `.env` s **`CORTEX_` prefiksom** (izbjegava koliziju s ambient
   praznim `ANTHROPIC_API_KEY`); seedani u `ai_providers.api_key`, kriptirani
   (`encrypted` cast).
-- **Gotchas po modelu:** Opus 4.7+ odbija `temperature` (AnthropicAdapter ga
-  preskače za `claude-opus-4-[7-9]*`); Gemini Flash troši izlaz na "thinking" →
-  adapter šalje `thinkingConfig.thinkingBudget=0`; OpenAI o-serija koristi
-  `max_completion_tokens` i bez temperature.
+- **Gotchas po modelu** (katalog osvježen 2026-07-29):
+  - Anthropic: Opus 4.7+ i CIJELA Claude 5 generacija (opus-5, sonnet-5,
+    fable/mythos) odbijaju `temperature` (`AnthropicAdapter::rejectsTemperature`).
+    Opus 5 / Sonnet 5 imaju thinking uključen po defaultu koji jede
+    `max_tokens` → adapter im eksplicitno šalje `thinking: disabled`
+    (Fable/Mythos to odbijaju — ne rutati boardroom tamo bez izmjene adaptera).
+  - OpenAI: o-serija I gpt-5.x traže `max_completion_tokens` i odbijaju
+    temperature (regex `/^(o\d|gpt-5)/`). Prije tog fixa su SVE gpt-5.x
+    persone tiho padale na fallback. gpt-5.x dodatno dobiva
+    `reasoning_effort` iz `cortex.openai_reasoning_effort` (default `low`).
+  - Google: Gemini 3.x koristi `thinkingConfig.thinkingLevel='minimal'`
+    (slanje legacy `thinkingBudget` uz njega = 400) i NE šalje mu se
+    temperature (deprecated, budući 400); 2.x flash zadržava
+    `thinkingBudget=0`, 2.x pro ne može ugasiti thinking.
+  - xAI: svi tekst modeli su reasoning s defaultom `high` → adapter uvijek
+    šalje `reasoning_effort` iz `cortex.xai_reasoning_effort` (default `low`).
+  - Deprecated s rokovima: o3 gasi se 2026-12-11 (aktivan, cijena ispravljena
+    $2/$8); gemini-2.5 obitelj gasi se 2026-10-16 (deaktivirana); grok-3 i
+    deepseek-chat ugašeni (inactive); grok-4.5 seedan inactive dok se ne
+    potvrdi EU dostupnost.
 - **Retry/backoff:** transijentne greške (connection, 408/429/5xx) retry-aju
   se na ISTOM modelu (`AbstractAdapter::withRetries`, backoff iz
   `cortex.provider_retry_backoff_ms`, default 1s+4s = 3 pokušaja) prije nego
@@ -527,6 +543,9 @@ Navigation grupe: **Account** / **Billing** / **Developers**.
   u ~tokenima (4 znaka/token, floor 4000 znakova); najstarije linije se režu
   prve, pinned blok i scribe sažetak nikad.
 - `prompt_caching` (true) — Anthropic `cache_control` na system bloku.
+- `openai_reasoning_effort` ('low') / `xai_reasoning_effort` ('low') —
+  cap na skriveno rezoniranje gpt-5.x / grok modela (naplaćuje se kao
+  output i jede max_tokens); prazan string = ne šalji parametar.
 - `provider_retry_backoff_ms` ('1000,4000' CSV) — backoff za transijentne
   provider greške; prazan string gasi retry.
 

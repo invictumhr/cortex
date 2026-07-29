@@ -26,7 +26,7 @@ class CortexBenchmark extends Command
         {message : Tema za usporedbu}
         {--personas= : Slugovi persona za boardroom (izostavljeno => 5 zadanih)}
         {--rounds=2 : Krugova rasprave}
-        {--model= : Model jednomodelne kontrole (default Opus 4.7)}
+        {--model= : Model jednomodelne kontrole (default Opus 5)}
         {--language=en : Jezik (ISO 639-1, default en; podržano: en, hr, sr, bs, sl, sk, cs, pl, bg, ru, uk, de, fr, it, es, pt, nl, ro, hu, sv, el, da, fi)}
         {--json : Strojno-čitljiv JSON izlaz}';
 
@@ -166,7 +166,7 @@ class CortexBenchmark extends Command
     private function runControl(AiProviderFactory $factory, string $topic): ?array
     {
         $modelString = trim((string) $this->option('model'))
-            ?: (string) config('cortex.benchmark_control_model', 'claude-opus-4-7');
+            ?: (string) config('cortex.benchmark_control_model', 'claude-opus-5');
 
         $model = AiModel::query()
             ->where('model_string', $modelString)
@@ -205,7 +205,7 @@ class CortexBenchmark extends Command
     private function evaluate(AiProviderFactory $factory, string $topic, string $single, string $boardroom): ?array
     {
         $model = AiModel::query()
-            ->where('model_string', (string) config('cortex.benchmark_evaluator_model', 'o3'))
+            ->where('model_string', (string) config('cortex.benchmark_evaluator_model', 'claude-sonnet-4-6'))
             ->where('is_active', true)
             ->with('provider')
             ->first();

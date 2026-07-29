@@ -34,8 +34,8 @@ class CortexDiscuss extends Command
         {message? : Tema ili poruka boardroomu (izostavi za pomoć)}
         {--chat= : Nastavi postojeći chat po ID-u}
         {--agents= : Brzi mod — koliko AI agenata u panelu (2-8). Sustav bira modele.}
-        {--models= : Custom-modeli mod — model_string-ovi odvojeni zarezom (npr. gpt-4o,claude-opus-4-7,grok-3). Broj persona = broj modela.}
-        {--pairs= : Custom mod — parovi persona:model odvojeni zarezom (npr. marco:gpt-4o,luna:claude-sonnet-4-6). Ista persona se može pojaviti više puta s različitim modelima.}
+        {--models= : Custom-modeli mod — model_string-ovi odvojeni zarezom (npr. gpt-5.4,claude-opus-5,grok-4.3). Broj persona = broj modela.}
+        {--pairs= : Custom mod — parovi persona:model odvojeni zarezom (npr. marco:gpt-5.4,luna:claude-sonnet-5). Ista persona se može pojaviti više puta s različitim modelima.}
         {--personas= : (legacy) Slugovi persona, koriste persona-default modele.}
         {--rounds=2 : Krugova po unosu}
         {--title= : Naslov chata (za novi chat)}
@@ -45,7 +45,7 @@ class CortexDiscuss extends Command
         {--context= : Putanja do datoteke s kontekstom (data model, postojeće stanje)}
         {--constraints= : Tvrda ograničenja koja sve persone moraju poštovati}
         {--architect : (legacy alias za --agents=5)}
-        {--strong : Panel trči na flagship modelima (Opus 4.7, o3, Grok 3, Gemini Pro...). Za quick mod prisiljava flagship tier.}
+        {--strong : Panel trči na flagship modelima (Opus 5, GPT-5.6, Grok 4.3, Gemini 3.6...). Za quick mod prisiljava flagship tier.}
         {--language=en : Jezik rasprave (ISO 639-1, default en; podržano: en, hr, sr, bs, sl, sk, cs, pl, bg, ru, uk, de, fr, it, es, pt, nl, ro, hu, sv, el, da, fi)}
         {--json : Strojno-čitljiv JSON izlaz za druge agente}';
 
@@ -458,7 +458,7 @@ class CortexDiscuss extends Command
     {
         $pairs = trim((string) $this->option('pairs'));
         if ($pairs !== '') {
-            // pairs="marco:gpt-4o,luna:claude-sonnet-4-6,marco:claude-opus-4-7"
+            // pairs="marco:gpt-5.4,luna:claude-sonnet-5,marco:claude-opus-5"
             $items = [];
             foreach (array_filter(array_map('trim', explode(',', $pairs))) as $token) {
                 [$slug, $modelString] = array_pad(explode(':', $token, 2), 2, null);

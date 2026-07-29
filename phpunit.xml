@@ -21,6 +21,9 @@
         <env name="APP_ENV" value="testing"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
+        <!-- Never hit a live Reverb/Pusher from tests — a running (or absent)
+             local websocket server must not flip test results. -->
+        <env name="BROADCAST_CONNECTION" value="log"/>
         <env name="CACHE_STORE" value="array"/>
         <!-- RefreshDatabase wipes the connected DB; use in-memory sqlite so
              tests can never touch the dev cortex schema. ENUM-incompatible

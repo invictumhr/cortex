@@ -16,29 +16,33 @@ class PersonaModelSeeder extends Seeder
     public function run(): void
     {
         $map = [
-            // Flagship reasoning — strategy & security
-            'marco' => 'claude-opus-4-8',
+            // Flagship reasoning — strategy & security. Opus 5 je drop-in
+            // upgrade Opusa 4.8 po istoj cijeni ($5/$25).
+            'marco' => 'claude-opus-5',
             'zara' => 'claude-opus-4-7',
-            // OpenAI reasoning model — architecture & mathematics
-            'ana' => 'o3',
+            // OpenAI reasoning — architecture & mathematics. Ana je bila na
+            // o3 (deprecated, gasi se 2026-12-11) → službena zamjena.
+            'ana' => 'gpt-5.6-sol',
             'ada' => 'gpt-5.5',
-            // Strong general — product & legal
-            'helena' => 'claude-sonnet-4-6',
+            // Strong general — product & legal. Sonnet 5 = ista cijena kao
+            // 4.6, novija generacija.
+            'helena' => 'claude-sonnet-5',
             'iris' => 'gpt-5.4',
-            // Deep science (migrated from legacy opus-4)
+            // Deep science
             'nikola' => 'claude-opus-4-7',
-            'chen' => 'claude-opus-4-8',
+            'chen' => 'claude-opus-5',
             // Large-context analytical — systems & futures
             'darwin' => 'gpt-4.1',
             'hawking' => 'gpt-5.4',
-            // Delivery & ethics (migrated from legacy sonnet-4)
-            'max' => 'claude-sonnet-4-6',
+            // Delivery & ethics
+            'max' => 'claude-sonnet-5',
             'rosa' => 'gpt-5.4',
-            // Creative/visual
-            'luna' => 'gpt-4o',
+            // Creative/visual — Luna na novom kreativnom mid-tieru ($1/$6)
+            'luna' => 'gpt-5.6-luna',
             'frida' => 'gemini-3.5-flash',
-            // Broad, multilingual — UX & localization
-            'miro' => 'gemini-2.5-flash',
+            // Broad, multilingual — UX & localization. Miro je bio na
+            // gemini-2.5-flash (deprecated, gašenje 2026-10-16).
+            'miro' => 'gemini-3.6-flash',
             'yuki' => 'gemini-3.5-flash',
             // Edgy / adversarial — skeptic, red team, aggressive sales
             'viktor' => 'grok-4.3',
@@ -61,7 +65,7 @@ class PersonaModelSeeder extends Seeder
             'pixel' => 'mistral-small-latest',
             // Realist — feasibility judgment; Chair — final decision
             'realist' => 'claude-sonnet-4-6',
-            'chair' => 'claude-opus-4-8',
+            'chair' => 'claude-opus-5',
         ];
 
         $modelIds = AiModel::query()->pluck('id', 'model_string');

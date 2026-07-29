@@ -179,7 +179,7 @@ class AgentBriefing extends Page
         Pick **one** of the three panel-init modes:
 
         - **Quick**: `agents: N` — system picks models + personas (recommended default)
-        - **Custom models**: `models: ["gpt-4o", "claude-opus-4-7", ...]`
+        - **Custom models**: `models: ["gpt-5.4", "claude-opus-5", ...]`
         - **Custom**: `panel: [{persona: "slug", model: "..."}, ...]` (advanced)
 
         Send an **`Idempotency-Key` header** (any unique string, e.g. a UUID) so a

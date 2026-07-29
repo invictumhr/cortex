@@ -44,6 +44,13 @@ return [
     // bill at 10% of the input rate — a large saving on context-heavy chats.
     'prompt_caching' => (bool) env('CORTEX_PROMPT_CACHING', true),
 
+    // Reasoning-effort caps for providers whose models default to heavy
+    // hidden reasoning (billed as output tokens and eating the max_tokens
+    // budget). "low" suits short boardroom turns; empty string stops the
+    // parameter from being sent at all.
+    'openai_reasoning_effort' => env('CORTEX_OPENAI_REASONING_EFFORT', 'low'),
+    'xai_reasoning_effort' => env('CORTEX_XAI_REASONING_EFFORT', 'low'),
+
     // Transient provider failures (connection errors, 408/429, 5xx) retry on
     // the SAME model with these backoff delays (ms) before the fallback model
     // takes over. Two entries = up to three attempts per model.
@@ -56,11 +63,15 @@ return [
     'router_model' => env('CORTEX_ROUTER_MODEL', 'gpt-4o-mini'),
 
     // `--strong` runs each panel persona on its provider's flagship model.
+    // Refreshed 2026-07-29: opus-5 = isti novac kao 4.8, novija generacija;
+    // gpt-5.6-sol nasljeđuje 5.5; gemini-2.5-pro je deprecated (gašenje
+    // 2026-10-16) → 3.6-flash. xAI ostaje 4.3 dok se grok-4.5 ne potvrdi
+    // dostupnim u EU (red u ai_models postoji, inactive).
     'flagship_models' => [
-        'anthropic' => 'claude-opus-4-8',
-        'openai' => 'gpt-5.5',
+        'anthropic' => 'claude-opus-5',
+        'openai' => 'gpt-5.6-sol',
         'xai' => 'grok-4.3',
-        'google' => 'gemini-2.5-pro',
+        'google' => 'gemini-3.6-flash',
         'mistral' => 'mistral-medium-latest',
         'deepseek' => 'deepseek-v4-pro',
     ],
@@ -69,11 +80,11 @@ return [
     // those generated roles run (round-robin) on this spread of models.
     'architect_model' => env('CORTEX_ARCHITECT_MODEL', 'claude-sonnet-4-6'),
     'architect_panel_models' => [
-        'claude-sonnet-4-6', 'gpt-5.4', 'grok-4.3', 'gemini-3.5-flash', 'mistral-large-latest', 'deepseek-v4-flash',
+        'claude-sonnet-5', 'gpt-5.4', 'grok-4.3', 'gemini-3.5-flash', 'mistral-large-latest', 'deepseek-v4-flash',
     ],
 
     // `cortex:benchmark` — the single-model control and the neutral evaluator.
-    'benchmark_control_model' => env('CORTEX_BENCHMARK_CONTROL_MODEL', 'claude-opus-4-7'),
+    'benchmark_control_model' => env('CORTEX_BENCHMARK_CONTROL_MODEL', 'claude-opus-5'),
     'benchmark_evaluator_model' => env('CORTEX_BENCHMARK_EVALUATOR_MODEL', 'claude-sonnet-4-6'),
 
     // Model tiers — BoardroomComposer picks from a tier based on the first
@@ -86,26 +97,26 @@ return [
             'gpt-5.4-nano',
             'gpt-5.4-mini',
             'claude-haiku-4-5-20251001',
-            'gemini-2.5-flash-lite',
-            'gemini-2.5-flash',
+            'gemini-3.1-flash-lite',
+            'gemini-3.5-flash-lite',
             'mistral-small-latest',
             'deepseek-v4-flash',
         ],
         'medium' => [
             'gpt-5.4',
-            'claude-sonnet-4-6',
+            'claude-sonnet-5',
             'grok-4.3',
             'mistral-large-latest',
             'gemini-3.5-flash',
             'deepseek-v4-flash',
         ],
         'flagship' => [
-            'gpt-5.5',
-            'o3',
-            'claude-opus-4-8',
-            'gemini-2.5-pro',
+            'gpt-5.6-sol',
+            'claude-opus-5',
+            'gemini-3.6-flash',
             'grok-4.3',
             'mistral-medium-latest',
+            'deepseek-v4-pro',
         ],
     ],
 
