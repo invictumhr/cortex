@@ -94,7 +94,7 @@ export const translations = {
         'quick.label':            'Koliko AI agenata u panelu?',
         'quick.hint':             'Modeli i persone se biraju nakon prve poruke — sustav čita složenost i odabire odgovarajuće uloge + različite AI modele.',
         'quick.strongLabel':      'Strong tier',
-        'quick.strongHint':       'Forsiraj flagship modele (Opus 4.7, o3, Grok 3, Gemini Pro) — skuplje, oštrije.',
+        'quick.strongHint':       'Forsiraj flagship modele (Opus 5, GPT-5.6 Sol, Grok 4.3, Gemini 3.6 Flash) — skuplje, oštrije.',
 
         // Custom models panel
         'models.label':           'Odaberi modele — kreira se jedna persona po modelu.',
@@ -238,7 +238,7 @@ export const translations = {
         'quick.label':            'How many AI agents in the panel?',
         'quick.hint':             'Models and personas are chosen after your first message — system reads its complexity and picks fitting roles + distinct AI models.',
         'quick.strongLabel':      'Strong tier',
-        'quick.strongHint':       'Force flagship models (Opus 4.7, o3, Grok 3, Gemini Pro) — pricier, sharper.',
+        'quick.strongHint':       'Force flagship models (Opus 5, GPT-5.6 Sol, Grok 4.3, Gemini 3.6 Flash) — pricier, sharper.',
 
         // Custom models panel
         'models.label':           'Pick the models you want — one persona will be generated per model.',

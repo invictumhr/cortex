@@ -36,8 +36,12 @@ return [
     'scribe_max_tokens' => (int) env('CORTEX_SCRIBE_MAX_TOKENS', 6000),
 
     // When a persona's own model fails or returns nothing, retry once on this
-    // model so the boardroom keeps the voice instead of dropping it.
-    'fallback_model' => env('CORTEX_FALLBACK_MODEL', 'gpt-4o-mini'),
+    // model so the boardroom keeps the voice instead of dropping it. Must be an
+    // active model (PersonaResponder requires is_active). Moved off gpt-4o-mini
+    // on 2026-10-20 — that legacy model is on OpenAI's exit track (Q4 2026) and
+    // this is load-bearing (catches EVERY drop-out). Haiku 4.5 is cheap, always
+    // on, and accepts temperature (no reasoning-token tax).
+    'fallback_model' => env('CORTEX_FALLBACK_MODEL', 'claude-haiku-4-5-20251001'),
 
     // Provider-side prompt caching (currently Anthropic cache_control). The
     // per-persona system block repeats verbatim across rounds, so cache reads
@@ -60,7 +64,10 @@ return [
     ),
 
     // Cheap model that classifies a topic and auto-picks the best-fit panel.
-    'router_model' => env('CORTEX_ROUTER_MODEL', 'gpt-4o-mini'),
+    // Moved off gpt-4o-mini on 2026-10-20 (same legacy-exit reason as the
+    // fallback). Router is load-bearing for --architect/default panel picking;
+    // Haiku 4.5 handles the short JSON-slug classification fine.
+    'router_model' => env('CORTEX_ROUTER_MODEL', 'claude-haiku-4-5-20251001'),
 
     // `--strong` runs each panel persona on its provider's flagship model.
     // Refreshed 2026-07-29: opus-5 = isti novac kao 4.8, novija generacija;

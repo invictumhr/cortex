@@ -34,3 +34,12 @@ Schedule::command('queue:prune-failed', ['--hours' => 168])
 Schedule::command('cortex:prune')
     ->weekly()
     ->onOneServer();
+
+// Model-catalog health — flags active models whose published retirement date
+// is past or within 30 days, and any config reference (fallback/router/flagship
+// /tier lists) pointing at a dead or dying model. Daily so a provider EOL is an
+// alert, not a production 404. Critical findings exit FAILURE + log to `alerts`.
+Schedule::command('cortex:model-health')
+    ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->onOneServer();

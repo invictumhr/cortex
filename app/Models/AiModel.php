@@ -21,6 +21,8 @@ class AiModel extends Model
         'input_cost_per_1m_tokens',
         'output_cost_per_1m_tokens',
         'is_active',
+        'deprecated_at',
+        'retires_at',
     ];
 
     protected function casts(): array
@@ -32,6 +34,8 @@ class AiModel extends Model
             'input_cost_per_1m_tokens' => 'decimal:4',
             'output_cost_per_1m_tokens' => 'decimal:4',
             'is_active' => 'boolean',
+            'deprecated_at' => 'date',
+            'retires_at' => 'date',
         ];
     }
 
@@ -48,6 +52,17 @@ class AiModel extends Model
     public function scopeActive(Builder $query): Builder
     {
         return $query->where('is_active', true);
+    }
+
+    /**
+     * Active models whose published retirement date falls on or before
+     * `$days` from now (0 = already past due). Drives `cortex:model-health`.
+     */
+    public function scopeRetiringWithin(Builder $query, int $days): Builder
+    {
+        return $query->where('is_active', true)
+            ->whereNotNull('retires_at')
+            ->whereDate('retires_at', '<=', now()->addDays($days)->toDateString());
     }
 
     /**

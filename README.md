@@ -277,8 +277,8 @@ In `config/cortex.php`:
 | `scribe_round_interval` | 2 | Scribe also summarises every N rounds |
 | `budget_limit` | 10.00 | EUR ceiling per chat (auto-pause) |
 | `daily_budget_limit` | 25.00 | EUR ceiling across all chats per day |
-| `router_model` | gpt-4o-mini | Cheap model that picks the panel for a topic |
-| `fallback_model` | gpt-4o-mini | Used if a persona's primary model fails |
+| `router_model` | claude-haiku-4-5 | Cheap model that picks the panel for a topic |
+| `fallback_model` | claude-haiku-4-5 | Used if a persona's primary model fails |
 | `flagship_models` | per-provider | Used by `--strong` mode |
 | `architect_model` | claude-sonnet-4-6 | Designs question-specific roles |
 | `output_language` | English | Default language for scribe/Chair (per-chat overridable) |

@@ -240,6 +240,8 @@ class ModelCompatibilityTest extends TestCase
         $o3 = $bySlug('o3');
         $this->assertSame(2.0, (float) $o3->input_cost_per_1m_tokens, 'o3 price fixed (was 5x reality)');
         $this->assertSame(8.0, (float) $o3->output_cost_per_1m_tokens);
+        $this->assertFalse((bool) $o3->is_active, 'o3 deactivated 2026-10-20 (API shutdown 2026-12-11)');
+        $this->assertSame('2026-12-11', $o3->retires_at?->toDateString(), 'o3 retirement date recorded');
 
         $this->assertFalse((bool) $bySlug('gemini-2.5-pro')?->is_active, '2.5 family deactivated (EOL 2026-10-16)');
         $this->assertFalse((bool) $bySlug('grok-3')?->is_active, 'grok-3 retired');
@@ -256,5 +258,34 @@ class ModelCompatibilityTest extends TestCase
         $this->assertSame('gpt-5.6-sol', $personaModel('ana'), 'ana moved off deprecated o3');
         $this->assertSame('gemini-3.6-flash', $personaModel('miro'), 'miro moved off deprecated gemini-2.5-flash');
         $this->assertSame('claude-opus-5', $personaModel('chair'));
+    }
+
+    // ── Model health (retirement tracking) ──────────────────────────────
+
+    public function test_configured_fallback_and_router_models_are_active(): void
+    {
+        // Regression guard for the gpt-4o-mini exit-track bug: the load-bearing
+        // fallback/router models must always resolve to an active catalog row.
+        foreach (['cortex.fallback_model', 'cortex.router_model'] as $key) {
+            $modelString = (string) config($key);
+            $model = AiModel::where('model_string', $modelString)->first();
+            $this->assertNotNull($model, "{$key} ({$modelString}) must exist in the catalog");
+            $this->assertTrue((bool) $model->is_active, "{$key} ({$modelString}) must be active");
+        }
+    }
+
+    public function test_model_health_passes_on_seeded_catalog(): void
+    {
+        $this->artisan('cortex:model-health')->assertExitCode(0);
+    }
+
+    public function test_model_health_fails_on_past_due_active_model(): void
+    {
+        $model = $this->makeModel('openai', 'about-to-die');
+        $model->update(['retires_at' => now()->subDay()->toDateString()]);
+
+        $this->artisan('cortex:model-health')
+            ->expectsOutputToContain('about-to-die')
+            ->assertExitCode(1);
     }
 }

@@ -143,7 +143,7 @@ Plus instant `sendBeacon` na `chats/{id}/leave`. Eksplicitna pauza pokreće
 - API ključevi u `.env` s **`CORTEX_` prefiksom** (izbjegava koliziju s ambient
   praznim `ANTHROPIC_API_KEY`); seedani u `ai_providers.api_key`, kriptirani
   (`encrypted` cast).
-- **Gotchas po modelu** (katalog osvježen 2026-07-29):
+- **Gotchas po modelu** (katalog osvježen 2026-07-29; lifecycle audit 2026-10-20):
   - Anthropic: Opus 4.7+ i CIJELA Claude 5 generacija (opus-5, sonnet-5,
     fable/mythos) odbijaju `temperature` (`AnthropicAdapter::rejectsTemperature`).
     Opus 5 / Sonnet 5 imaju thinking uključen po defaultu koji jede
@@ -159,10 +159,23 @@ Plus instant `sendBeacon` na `chats/{id}/leave`. Eksplicitna pauza pokreće
     `thinkingBudget=0`, 2.x pro ne može ugasiti thinking.
   - xAI: svi tekst modeli su reasoning s defaultom `high` → adapter uvijek
     šalje `reasoning_effort` iz `cortex.xai_reasoning_effort` (default `low`).
-  - Deprecated s rokovima: o3 gasi se 2026-12-11 (aktivan, cijena ispravljena
-    $2/$8); gemini-2.5 obitelj gasi se 2026-10-16 (deaktivirana); grok-3 i
-    deepseek-chat ugašeni (inactive); grok-4.5 seedan inactive dok se ne
-    potvrdi EU dostupnost.
+  - Deprecated s rokovima: o3 **deaktiviran 2026-10-20** (API shutdown
+    2026-12-11, nijedna persona ga nije koristila); gemini-2.5 obitelj
+    (EOL 2026-10-16, prošao) deaktivirana; grok-3 i deepseek-chat ugašeni
+    (inactive); grok-4.5 seedan inactive dok se ne potvrdi EU dostupnost.
+  - **DeepSeek peak/off-peak** (potvrđeno 2026-10-20, aktivno od 2026-08-16):
+    peak satovi (01:00-04:00 + 06:00-10:00 UTC, pon-pet) = 2× off-peak.
+    Seedane cijene su OFF-PEAK; peak overshoot do 2× hvata `poison_pill_ratio`
+    (1.3) → admin alert. Enterprise marža (1.7×) je ispod nule na 2× peak →
+    TODO razmotriti seedanje peak cijene (vidi bilješku u `AiModelSeeder`).
+  - **EOL tracking:** `ai_models.retires_at` / `deprecated_at` (nullable date)
+    nose datume gašenja; `cortex:model-health` (dnevni cron) upozorava na
+    aktivne modele koji se gase <30 dana i na config reference
+    (fallback/router/flagship/tier liste) koje pokazuju na mrtav/neaktivan
+    model — exit FAILURE + `alerts` kanal. Zamjena ručnog čitanja ovog bloka.
+  - **`fallback_model` i `router_model` = `claude-haiku-4-5-20251001`**
+    (prije `gpt-4o-mini`, maknut 2026-10-20 — legacy exit-track, a oba su
+    nosiva: fallback hvata svaki drop-out, router bira panel).
 - **Retry/backoff:** transijentne greške (connection, 408/429/5xx) retry-aju
   se na ISTOM modelu (`AbstractAdapter::withRetries`, backoff iz
   `cortex.provider_retry_backoff_ms`, default 1s+4s = 3 pokušaja) prije nego
@@ -364,6 +377,9 @@ claim preko `Cache::add`, uspjeh se sprema 24h, fail oslobađa ključ za retry).
 - `cortex:wallet-release-stale [--hours=6] [--dry-run]` — hourly sweep za
   orphan RESERVE retke (job umro između reserve i settle); release-a smrznuta
   sredstva natrag u spendable.
+- `cortex:model-health [--days=30] [--json]` — daily; flagira modele pred
+  gašenjem (`retires_at`) i config reference na mrtav/neaktivan model; exit
+  `FAILURE` na kritičan nalaz.
 - `cortex-feedback <chat> <1-5>` (`--used` = stvarno implementirane ideje),
   `cortex-benchmark "<tema>"` (boardroom vs jedan jak model + slijepi ocjenjivač),
   `cortex-knowledge`, `cortex:personas`, `cortex:prune` (briše orphane ephemeral
@@ -574,9 +590,14 @@ Sve podesivo preko `CORTEX_*` env varijabli.
 - **`queue:prune-failed --hours=168`** — daily; failed_jobs stariji od tjedan
   dana se brišu (payloadi su veliki, tablica bi rasla unbounded).
 - **`cortex:prune`** — weekly; orphan ephemeral persone.
+- **`cortex:model-health`** — dailyAt 04:30, withoutOverlapping, onOneServer.
+  Flagira aktivne modele koji se gase <30 dana (`--days=N`) i config reference
+  (fallback/router/flagship/tier/architect/benchmark) na mrtav/neaktivan/past-due
+  model. Exit `FAILURE` na kritičan nalaz; `--json` za scripting; loga u `alerts`.
 - **Alerts log channel** (`config/logging.php` → `alerts`): poison pill,
-  reconcile drift i stale-reserve sweep pišu i u `storage/logs/alerts-*.log`
-  (90 dana retencije) — ops surface odvojen od laravel.log šuma.
+  reconcile drift, stale-reserve sweep i model-health pišu i u
+  `storage/logs/alerts-*.log` (90 dana retencije) — ops surface odvojen od
+  laravel.log šuma.
 - **Treba** Windows Task Scheduler ili Linux cron koji svake minute pokreće
   `php artisan schedule:run` (inače cron nikad ne okine). Production deployment
   step.

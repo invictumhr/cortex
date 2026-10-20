@@ -26,8 +26,8 @@ class AiModelSeeder extends Seeder
             ['provider' => 'anthropic', 'name' => 'Claude Sonnet 4.6','model_string' => 'claude-sonnet-4-6',         'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 3.00,  'out' => 15.00],
             ['provider' => 'anthropic', 'name' => 'Claude Haiku 4.5', 'model_string' => 'claude-haiku-4-5-20251001', 'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 1.00,  'out' => 5.00],
             // Anthropic legacy — retired June 15 2026
-            ['provider' => 'anthropic', 'name' => 'Claude Opus 4',   'model_string' => 'claude-opus-4-20250514',    'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 15.00, 'out' => 75.00, 'active' => false],
-            ['provider' => 'anthropic', 'name' => 'Claude Sonnet 4', 'model_string' => 'claude-sonnet-4-20250514',  'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 3.00,  'out' => 15.00, 'active' => false],
+            ['provider' => 'anthropic', 'name' => 'Claude Opus 4',   'model_string' => 'claude-opus-4-20250514',    'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 15.00, 'out' => 75.00, 'active' => false, 'deprecated' => '2026-03-01', 'retires' => '2026-06-15'],
+            ['provider' => 'anthropic', 'name' => 'Claude Sonnet 4', 'model_string' => 'claude-sonnet-4-20250514',  'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 3.00,  'out' => 15.00, 'active' => false, 'deprecated' => '2026-03-01', 'retires' => '2026-06-15'],
 
             // ── OpenAI ──────────────────────────────────────────────────
             ['provider' => 'openai', 'name' => 'GPT-5.6 Sol',   'model_string' => 'gpt-5.6-sol',   'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 5.00, 'out' => 30.00],
@@ -37,14 +37,15 @@ class AiModelSeeder extends Seeder
             ['provider' => 'openai', 'name' => 'GPT-5.4',      'model_string' => 'gpt-5.4',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 2.50, 'out' => 15.00],
             ['provider' => 'openai', 'name' => 'GPT-5.4 mini', 'model_string' => 'gpt-5.4-mini', 'vision' => true, 'tools' => true, 'context' => 400000,  'in' => 0.75, 'out' => 4.50],
             ['provider' => 'openai', 'name' => 'GPT-5.4 nano', 'model_string' => 'gpt-5.4-nano', 'vision' => true, 'tools' => true, 'context' => 400000,  'in' => 0.20, 'out' => 1.25],
-            // o3: deprecated, API shutdown 2026-12-11 (zamjena gpt-5.6-sol).
-            // Cijena je srezana 80% još u lipnju 2025 — stari seed ($10/$40)
-            // je naplaćivao 5x stvarni provider trošak.
-            ['provider' => 'openai', 'name' => 'o3',           'model_string' => 'o3',           'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 2.00, 'out' => 8.00],
-            // Legacy track — tekst modeli još služeni, ali planirati izlaz do Q4 2026.
-            ['provider' => 'openai', 'name' => 'GPT-4.1',      'model_string' => 'gpt-4.1',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 2.00, 'out' => 8.00],
-            ['provider' => 'openai', 'name' => 'GPT-4o',       'model_string' => 'gpt-4o',       'vision' => true, 'tools' => true, 'context' => 128000,  'in' => 2.50, 'out' => 10.00],
-            ['provider' => 'openai', 'name' => 'GPT-4o mini',  'model_string' => 'gpt-4o-mini',  'vision' => true, 'tools' => true, 'context' => 128000,  'in' => 0.15, 'out' => 0.60],
+            // o3: deprecated, API shutdown 2026-12-11. Deaktiviran 2026-10-20
+            // (nijedna persona ga ne koristi — Ana je na gpt-5.6-sol) da se
+            // izbjegne 404 u zadnjih ~7 tjedana života.
+            ['provider' => 'openai', 'name' => 'o3',           'model_string' => 'o3',           'vision' => true, 'tools' => true, 'context' => 200000,  'in' => 2.00, 'out' => 8.00, 'active' => false, 'deprecated' => '2026-06-01', 'retires' => '2026-12-11'],
+            // Legacy track — tekst modeli još služeni, deprecated 2026-07-29;
+            // OpenAI nije objavio tvrdi API retirement datum pa retires=null.
+            ['provider' => 'openai', 'name' => 'GPT-4.1',      'model_string' => 'gpt-4.1',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 2.00, 'out' => 8.00, 'deprecated' => '2026-07-29'],
+            ['provider' => 'openai', 'name' => 'GPT-4o',       'model_string' => 'gpt-4o',       'vision' => true, 'tools' => true, 'context' => 128000,  'in' => 2.50, 'out' => 10.00, 'deprecated' => '2026-07-29'],
+            ['provider' => 'openai', 'name' => 'GPT-4o mini',  'model_string' => 'gpt-4o-mini',  'vision' => true, 'tools' => true, 'context' => 128000,  'in' => 0.15, 'out' => 0.60, 'deprecated' => '2026-07-29'],
 
             // ── xAI ─────────────────────────────────────────────────────
             ['provider' => 'xai', 'name' => 'Grok 4.3', 'model_string' => 'grok-4.3', 'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 1.25, 'out' => 2.50],
@@ -53,7 +54,7 @@ class AiModelSeeder extends Seeder
             // aktivirati ručno nakon probe s produkcijskim ključem.
             ['provider' => 'xai', 'name' => 'Grok 4.5', 'model_string' => 'grok-4.5', 'vision' => true, 'tools' => true, 'context' => 500000, 'in' => 2.00, 'out' => 6.00, 'active' => false],
             // Retired 2026-05-15; slug se privremeno redirecta na grok-4.3.
-            ['provider' => 'xai', 'name' => 'Grok 3',   'model_string' => 'grok-3',   'vision' => true, 'tools' => true, 'context' => 131000,  'in' => 3.00, 'out' => 15.00, 'active' => false],
+            ['provider' => 'xai', 'name' => 'Grok 3',   'model_string' => 'grok-3',   'vision' => true, 'tools' => true, 'context' => 131000,  'in' => 3.00, 'out' => 15.00, 'active' => false, 'deprecated' => '2026-03-15', 'retires' => '2026-05-15'],
 
             // ── Google ──────────────────────────────────────────────────
             ['provider' => 'google', 'name' => 'Gemini 3.6 Flash',      'model_string' => 'gemini-3.6-flash',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 1.50, 'out' => 7.50],
@@ -62,9 +63,9 @@ class AiModelSeeder extends Seeder
             ['provider' => 'google', 'name' => 'Gemini 3.1 Flash Lite', 'model_string' => 'gemini-3.1-flash-lite', 'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 0.25, 'out' => 1.50],
             // Gemini 2.5 obitelj: deprecated, gašenje najavljeno za 2026-10-16
             // (9.7. već bio jednodnevni 404 incident) — deaktivirano odmah.
-            ['provider' => 'google', 'name' => 'Gemini 2.5 Pro',        'model_string' => 'gemini-2.5-pro',        'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 1.25, 'out' => 10.00, 'active' => false],
-            ['provider' => 'google', 'name' => 'Gemini 2.5 Flash',      'model_string' => 'gemini-2.5-flash',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 0.30, 'out' => 2.50,  'active' => false],
-            ['provider' => 'google', 'name' => 'Gemini 2.5 Flash Lite', 'model_string' => 'gemini-2.5-flash-lite', 'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 0.10, 'out' => 0.40,  'active' => false],
+            ['provider' => 'google', 'name' => 'Gemini 2.5 Pro',        'model_string' => 'gemini-2.5-pro',        'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 1.25, 'out' => 10.00, 'active' => false, 'deprecated' => '2026-07-29', 'retires' => '2026-10-16'],
+            ['provider' => 'google', 'name' => 'Gemini 2.5 Flash',      'model_string' => 'gemini-2.5-flash',      'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 0.30, 'out' => 2.50,  'active' => false, 'deprecated' => '2026-07-29', 'retires' => '2026-10-16'],
+            ['provider' => 'google', 'name' => 'Gemini 2.5 Flash Lite', 'model_string' => 'gemini-2.5-flash-lite', 'vision' => true, 'tools' => true, 'context' => 1000000, 'in' => 0.10, 'out' => 0.40,  'active' => false, 'deprecated' => '2026-07-29', 'retires' => '2026-10-16'],
 
             // ── Mistral ─────────────────────────────────────────────────
             // Napomena: Medium 3.5 JE flagship i skuplji od Large 3 (Large 3
@@ -74,12 +75,17 @@ class AiModelSeeder extends Seeder
             ['provider' => 'mistral', 'name' => 'Mistral Small 4',    'model_string' => 'mistral-small-latest',  'vision' => true, 'tools' => true, 'context' => 256000, 'in' => 0.15, 'out' => 0.60],
 
             // ── DeepSeek ────────────────────────────────────────────────
-            // Watch: najavljen peak-hour 2x surcharge (Beijing radno vrijeme);
-            // još nije aktivan 2026-07-29 — provjeriti changelog u kolovozu.
+            // POTVRĐENO (2026-10-20): peak/off-peak billing aktivan od
+            // 2026-08-16. Peak (01:00-04:00 + 06:00-10:00 UTC, pon-pet) =
+            // 2x off-peak. Ove cijene su OFF-PEAK (donja granica). Peak
+            // overshoot do 2x hvata poison_pill_ratio (1.3) → admin alert u
+            // `alerts` kanalu; snapshot pricing apsorbira razliku unutar runa.
+            // TODO: razmotriti seedanje peak cijene radi zaštite enterprise
+            // marže (1.7x ide ispod nule na 2x provider peak).
             ['provider' => 'deepseek', 'name' => 'DeepSeek V4 Flash', 'model_string' => 'deepseek-v4-flash', 'vision' => false, 'tools' => true, 'context' => 1000000, 'in' => 0.14, 'out' => 0.28],
             ['provider' => 'deepseek', 'name' => 'DeepSeek V4 Pro',   'model_string' => 'deepseek-v4-pro',   'vision' => false, 'tools' => true, 'context' => 1000000, 'in' => 0.435, 'out' => 0.87],
             // DeepSeek legacy — ugašen 2026-07-24 (alias više ne postoji)
-            ['provider' => 'deepseek', 'name' => 'DeepSeek V3', 'model_string' => 'deepseek-chat', 'vision' => false, 'tools' => true, 'context' => 64000, 'in' => 0.27, 'out' => 1.10, 'active' => false],
+            ['provider' => 'deepseek', 'name' => 'DeepSeek V3', 'model_string' => 'deepseek-chat', 'vision' => false, 'tools' => true, 'context' => 64000, 'in' => 0.27, 'out' => 1.10, 'active' => false, 'deprecated' => '2026-06-01', 'retires' => '2026-07-24'],
         ];
 
         $providerIds = AiProvider::query()->pluck('id', 'slug');
@@ -102,6 +108,8 @@ class AiModelSeeder extends Seeder
                     'input_cost_per_1m_tokens' => $m['in'],
                     'output_cost_per_1m_tokens' => $m['out'],
                     'is_active' => $m['active'] ?? true,
+                    'deprecated_at' => $m['deprecated'] ?? null,
+                    'retires_at' => $m['retires'] ?? null,
                 ]
             );
         }
